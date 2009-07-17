@@ -1,0 +1,25 @@
+\name{loadBandSample}
+\alias{loadBandSample}
+%- Also NEED an '\alias' for EACH other topic documented here.
+\title{Function to load an AVIRIS image band sample}
+\description{
+  Loads an image band sample using \code{lbandsample} interface.
+}
+\usage{
+loadBandSample(I, X = 5, C = 614, F = 30, B = 224)
+}
+%- maybe also 'usage' for other objects documented here.
+\arguments{
+  \item{I}{Name of the image file}
+  \item{X}{Number of the band}
+  \item{C}{Number of columns of each band}
+  \item{F}{Number of lines of each band}
+  \item{B}{Total number of bands}
+}
+
+\author{Marcelo Almiron and Adrian Muract}
+
+\seealso{See Also as \code{\link{loadBand}}.}
+
+\keyword{methods}% at least one, from doc/KEYWORDS
+

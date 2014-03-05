@@ -52,7 +52,7 @@ void	PrintPoint( tPointi p );
 void    inpolyCopy ( tPolygoni a, tPolygoni b , int n );
 int ReadPoly( tPolygoni P );
 
-inpolyMain(int *nv, int *xvector, int *yvector, double *image, int *nrow, int *ncol, double *region, int *regionLength)
+void inpolyMain(int *nv, int *xvector, int *yvector, double *image, int *nrow, int *ncol, double *region, int *regionLength)
 {
   int n,i,row,col,j,count=0,enter=0;
   double **img;
@@ -85,7 +85,6 @@ inpolyMain(int *nv, int *xvector, int *yvector, double *image, int *nrow, int *n
     //printf("%3d%4d%4d\n", i, P[i][0], P[i][1]);
   }
   //printf("n = %3d vertices read\n",n);
-  putchar('\n');
   
   n = ReadPoly( P );
   inpolyCopy( P, Porig, n );
@@ -201,17 +200,17 @@ void PrintPoint( tPointi p )
 {
   int	i;
   
-  putchar('(');
+  
   for ( i = 0; i < DIM; i++ ) {
     //printf("%d", p[i]);
-    if ( i != DIM-1 ) putchar(',');
+    //if ( i != DIM-1 ) putchar(',');
   }
-  putchar(')');
+  
 }
 
 /*
    Reads in the coordinates of the vertices of a polygon from stdin,
-   puts them into P, and returns n, the number of vertices.
+   moves them into P, and returns n, the number of vertices.
    Formatting conventions: etc.
    */
 int ReadPoly( tPolygoni P )
@@ -221,7 +220,8 @@ int ReadPoly( tPolygoni P )
   do {
     if ( n < PMAX )
       break;
-    printf("Error in read_poly:  too many points; max is %d\n", PMAX);
+    //printf("Error in read_poly:  too many points; max is %d\n", PMAX);
+    //Rcerr << "in inpoly::ReadPoly()" << std::endl;
   }
   while ( 1 );
 

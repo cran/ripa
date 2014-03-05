@@ -1,3 +1,20 @@
+#################################################################################################
+##
+## ripa: R Image Processing and Analysis
+##
+##
+## Copyright (c) 2014 Talita Perciano
+## For complete license terms see file LICENSE
+##################################################################################################
+
+##################################################################################################################
+############################### Initialization of environment ripaEnv ############################################
+##################################################################################################################
+
+ripaEnv <- new.env()
+
+##################################################################################################################
+
 ##################################################################################################################
 ####################################### Aviris functions #########################################################
 ##################################################################################################################
@@ -17,7 +34,7 @@
 
 ########################################################################
 ###                                                                  ###
-###       Marcelo G. Almiron		        Adrian E. Muract     ###
+###       Marcelo G. Almiron		        Adrian E. Muract         ###
 ###                                                                  ###
 ###   <almiron.marcelo@gmail.com>     <amuract@dc.exa.unrc.edu.ar>   ###
 ###                                                                  ###
@@ -238,7 +255,7 @@ Grey <- function(band,x0,y0,...){
 	}else{
 		c <- h/sh
 	}
-	x11(width=sw*c,height=sh*c)
+	dev.new(width=sw*c,height=sh*c)
 	opar <- par(no.readonly=TRUE)
 	opar$usr <- c(x0,x0+band@samples-1,y0+band@numberOfLines-1,y0)
 	image(1:band@samples,1:band@numberOfLines,t(band@data[band@numberOfLines:1,])     
@@ -261,7 +278,7 @@ RGB <- function(red,green,blue,x0,y0,...){
 	colvec <- rgb(round(rc,7),round(gc,7),round(bc,7))
     	colors <- unique(colvec)
     	colmat <- array(match(colvec,colors), dim = dim(red@data)[1:2])
-	x11(width=6.39,height=5.33)
+	dev.new(width=6.39,height=5.33)
 	opar <- par(no.readonly=TRUE)
 	opar$usr <- c(x0,x0+dim(colmat)[2],y0+dim(colmat)[1],y0)
 	image(1:dim(colmat)[2],1:dim(colmat)[1],t(colmat[nrow(colmat):1,])     
@@ -491,20 +508,20 @@ setMethod("initialize",
 		.Object@color <- color
 		.Object@scene <- scene
 #### tratamiento por si las bandas pertenecen a diferentes escenas ##################
-		i <- 1																		#
-		bool<-TRUE																	#
-		while (i!=(length(band))){													#
-			bool <- all.equal(band[[i]]@scene, band[[i+1]]@scene)					#
-####		cat(band[[i]]@scene," = ", band[[i+1]]@scene," es ", bool,"\n")			#
-			i <- i+1																#
-		}																			#
-		if (!bool) {																#
-			cat("OJO QUE LAS BANDAS PERTENECEN A DIFERENTES ESCENAS \n")			#
-		}else {																		#
-			cat("TODO BIEN LOCO \n")												#
-		}																			#
+		i <- 1									#
+		bool<-TRUE								#
+		while (i!=(length(band))){						#
+			bool <- all.equal(band[[i]]@scene, band[[i+1]]@scene)		#
+####		cat(band[[i]]@scene," = ", band[[i+1]]@scene," es ", bool,"\n")		#
+			i <- i+1							#
+		}									#
+		if (!bool) {								#
+			cat("OJO QUE LAS BANDAS PERTENECEN A DIFERENTES ESCENAS \n")	#
+		}else {									#
+			cat("TODO BIEN LOCO \n")					#
+		}									#
 ###	la decision que tome es solo advertirle al usuario que las bandas pertenecen a 	#
-###	distintas escenas. 																#
+###	distintas escenas. 								#
 #####################################################################################
 		.Object@bands <- band
 		.Object
@@ -571,10 +588,12 @@ Zprofile <- function(scene, X=NULL, Y=NULL){
 		i <- i+1
 	}
 	close(conexionParaLeer,rw="read")
-	x11()
+	dev.new()
 	plot(Z, type="l", col="red")	
     Z
 }
+
+
 
 ##################################################################################################################
 
@@ -584,7 +603,7 @@ Zprofile <- function(scene, X=NULL, Y=NULL){
 
 # Function to read LAN images
 read.lan <- function(arquivo){
-	LANfile <<- arquivo
+	assign('LANfile',arquivo,envir=ripaEnv)
 	res <- .C("getImgData",file=as.character(arquivo),numbands=as.integer(0),row=as.integer(0),col=as.integer(0),PACKAGE="ripa")
 	row <- res$row
 	col <- res$col
@@ -609,7 +628,7 @@ write.lan <- function(arquivo,img){
 		mat[,i] = t(img[,,i]*255)
 	}
 	
-	res <- .C("writeLAN",file1 = as.character(LANfile),file2 = as.character(arquivo), as.integer(as.vector(t(mat))),PACKAGE="ripa")
+	res <- .C("writeLAN",file1 = as.character(get('LANfile',envir=ripaEnv)),file2 = as.character(arquivo), as.integer(as.vector(t(mat))),PACKAGE="ripa")
 }
 #
 
@@ -635,7 +654,7 @@ stretchImg <- function(img){
 	if (is.na(dim(img)[3])) img <- array(img,dim=c(nrow(img),ncol(img),1))
 	else img <- array(img,dim=dim(img))
 	
-	img2 <- array(0,dim=dim(img))
+	res_final <- array(0,dim=dim(img))
 	n <- nrow(img)*ncol(img)
 	a <- as.double(0)
 	b <- as.double(1)
@@ -645,10 +664,9 @@ stretchImg <- function(img){
 		d <- as.double(x[[20]])
 		res <- .C("stretch",img[,,i],a,b,c,d,as.integer(nrow(img)),as.integer(ncol(img)),out=as.double(rep(0,n)),PACKAGE="ripa")
 		mat <- matrix(res$out,ncol=ncol(img))
-		img2[,,i] <- imagematrix(mat)
-		print(i)
+		res_final[,,i] <- imagematrix(mat)
 	}
-	return(img2)
+	return(res_final)
 }
 
 # Function to apply the new brightness and contrast
@@ -659,49 +677,61 @@ contBriImg <- function(img,cont,bri){
 	
 	if (is.na(cont)) cont <- 1
 	if (is.na(bri)) bri <- 0
-	img5<-img
+	res_final<-img
 	for (i in 1:dim(img)[3]){
-		img2 <-as.matrix(img[,,i])
+		res <-as.matrix(img[,,i])
 		
-		img2 <- cont*img2+bri
+		res <- cont*res+bri
 		
-		nrow <- as.integer(nrow(img2))
-		ncol <- as.integer(ncol(img2))
+		nrow <- as.integer(nrow(res))
+		ncol <- as.integer(ncol(res))
 		
-		out <- .C("normalize",image<-as.vector(as.double(img2)),nrow,ncol,as.double(bri),PACKAGE="ripa")
+		#out <- .C("normalize",image<-as.vector(as.double(res)),nrow,ncol,as.double(bri),PACKAGE="RIPA")
 		
-		img2 <- matrix(image,nrow=nrow)
+		#res <- matrix(image,nrow=nrow)
+
+		index <- which(res<0)
+		res[index] <- 0
+		index <- which(res>1)
+		res[index] <- 1
 		
-		img5[,,i]<-img2
+		res_final[,,i]<-res
 	}
-	return(img5)
+	return(res_final)
+}
+
+#Check active tab
+checkTab <- function(){
+	tn_local <- get('tn',envir=ripaEnv)
+	aux <- tclvalue(tcl(tn_local,"select"))
+	tab <- unlist(strsplit(aux,'[.]'))
+	tab <- tab[length(tab)]
+	return(tab)		
 }
 
 # Function to read AVIRIS images
 read.aviris <- function(fileName){
-	aux <- tclvalue(tcl(tn,"select"))
+	tab <- checkTab()
  	
- 	if (aux==".1.1.1") bandsIndexes <- AVIRISbands1
-	else bandsIndexes <- AVIRISbands2
+ 	if (tab=="1") bandsIndexes <- get('AVIRISbands1',envir=ripaEnv)
+	else bandsIndexes <- get('AVIRISbands2',envir=ripaEnv)
 
 	img <- limage(as.character(fileName),"reflectance")
 	imgtmpScene2 <- lscene(img,2)
-	#print(Sys.time())
-	#names(bands) <- bandsIndexes
 	mat <- array(0,dim=c(512,614,length(bandsIndexes)))
-	bands <<- vector(length=length(bandsIndexes),mode="list")
+	assign('bands',vector(length=length(bandsIndexes),mode="list"),envir=ripaEnv)
+	bands_local <- get('bands',envir=ripaEnv)
 	
 	pb <- tkProgressBar(title = "Reading bands...", min = 0, max = length(bandsIndexes), width = 300)
 	for (i in 1:length(bandsIndexes)){
-		bands[[i]] <<- lband(imgtmpScene2,bandsIndexes[i])
-		mat[,,i] <- clineal(bands[[i]]@data,0,1)
+		bands_local[[i]] <- lband(imgtmpScene2,bandsIndexes[i])
+		mat[,,i] <- clineal(bands_local[[i]]@data,0,1)
 		if (is.nan(mat[,,i][1])){
 			for (j in 1:length(mat[,,i])) mat[,,i][j] <- 0
 		}
-		#print(paste("Band ",bandsIndexes[i],sep="")
 		setTkProgressBar(pb, i, label=paste(round(i/length(bandsIndexes)*100, 0),"% done"))
 	}
-	#print(Sys.time())
+	assign('bands',bands_local,envir=ripaEnv)
 	close(pb)
 	return(mat)
 }
@@ -710,7 +740,6 @@ read.aviris <- function(fileName){
 modalDialog <- function(title,question,entryInit,entryWidth=20,returnValOnCancel="ID_CANCEL"){
 	dlg <- tktoplevel()
 	tkwm.deiconify(dlg)
-	#tkgrab.set(dlg)
 	tkfocus(dlg)
 	tkwm.title(dlg,title)
 	tkwm.geometry(dlg,"+350+300")
@@ -729,7 +758,6 @@ modalDialog <- function(title,question,entryInit,entryWidth=20,returnValOnCancel
 		ReturnVal <<- returnValOnCancel
 		tkgrab.release(dlg)
 		tkdestroy(dlg)
-		#tkfocus(ttMain)
 	}
 	OK.but <-tkbutton(dlg,text="   OK   ",command=onOK)
 	Cancel.but <-tkbutton(dlg,text=" Cancel ",command=onCancel)
@@ -756,40 +784,100 @@ RIPAgui <- function(){
 	dyn.load(system.file("libs/ripa.so",package="ripa"))
 	##################################################################################################################
 
+	##################################################################################################################
+	############################### Initialization of environment ripaEnv ############################################
+	##################################################################################################################
+
+	assign('img1',NULL,envir=ripaEnv)
+	assign('img2',NULL,envir=ripaEnv)	
+	assign('img3',NULL,envir=ripaEnv)
+	assign('visualBands1',c(1,2,3),envir=ripaEnv)
+	assign('visualBands2',c(1,2,3),envir=ripaEnv)
+	assign('AVIRISbands1',NULL,envir=ripaEnv)
+	assign('AVIRISbands2',NULL,envir=ripaEnv)
+	assign('imageType1',NULL,envir=ripaEnv)	
+	assign('imageType2',NULL,envir=ripaEnv)		
+	assign('numbands1',0,envir=ripaEnv)		
+	assign('numbands2',0,envir=ripaEnv)		
+	assign('regionsList',list(),envir=ripaEnv)			
+	assign('regionType',NULL,envir=ripaEnv)			
+	assign('regionPointsX',NULL,envir=ripaEnv)	
+	assign('regionPointsY',NULL,envir=ripaEnv)
+	assign('LANfile',NULL,envir=ripaEnv)	
+	assign('tn',NULL,envir=ripaEnv)	
+	assign('ttregionsbands1',NULL,envir=ripaEnv)
+	assign('ttregionsbands2',NULL,envir=ripaEnv)
+	assign('regionChoice',NULL,envir=ripaEnv)
+	assign('bandsValues',NULL,envir=ripaEnv)
+	assign('regionsListAux',NULL,envir=ripaEnv)
+	assign('xCoords1',NULL,envir=ripaEnv)
+	assign('yCoords1',NULL,envir=ripaEnv)
+	assign('bands',NULL,envir=ripaEnv)
+	assign('xCoords2',NULL,envir=ripaEnv)
+	assign('yCoords2',NULL,envir=ripaEnv)
+	assign('ttpoints',NULL,envir=ripaEnv)
+	assign('bandSet',NULL,envir=ripaEnv)
+	assign('imgtmp',NULL,envir=ripaEnv)
+	assign('imgtmp2',NULL,envir=ripaEnv)
+
+	##################################################################################################################
 
 	##################################################################################################################
 	#################################### Required packages ###########################################################
 	##################################################################################################################
-	tclRequire("BWidget")
-	tclRequire("Tktable")
-	tclRequire("Img")
+
+	if(!is.tclObj(tclRequire("BWidget"))){
+		tkmessageBox(title="Error",message="Package BWidget was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
+		return()
+	}
+	if(!is.tclObj(tclRequire("Tktable"))){
+		tkmessageBox(title="Error",message="Package Tktable was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
+		return()
+	}
+	if(!is.tclObj(tclRequire("Img"))){
+		tkmessageBox(title="Error",message="Package Img was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
+		return()
+	}
+
+	if(!(require(tkrplot))){
+		tkmessageBox(title="Error",message="Package tkrplot was not found. Please, install this package running the command 'install.packages('tkrplot')",icon="error",type="ok")
+		return()
+	}
+
+	if(!require(e1071)){
+		tkmessageBox(title="Error",message="Package e1071 is necessary to complete this action. Please, install this package running the command 'install.packages('e1071')",icon="error",type="ok")
+		return()
+	}	
+
+
+	if(!require(rggobi)){
+		tkmessageBox(title="Error",message="Package rggobi was not found. Please, install this package running the command 'install.packages('rggobi')",icon="error",type="ok")
+		return()
+	}
+
+	if(!require(jpeg)){
+		tkmessageBox(title="Error",message="Package jpeg is necessary to complete this action. Please, install this package running the command 'install.packages('jpeg')",icon="error",type="ok")
+		return()
+	}
+
+
+	if(!require(png)){
+		tkmessageBox(title="Error",message="Package png is necessary to complete this action. Please, install this package running the command 'install.packages('png')",icon="error",type="ok")
+		return()
+	}
+
+	if(!(require(fftw))){
+		tkmessageBox(title="Error",message="Package tkrplot was not found. Please, install this package running the command 'install.packages('fftw')",icon="error",type="ok")
+		return()
+	}
+
 	##################################################################################################################
 
 	ans <- tkmessageBox(title="Resolution",message="We recomend to use this package with resolution of 1024x768. Do you want to continue?",icon="question",type="yesno")
 	ans <- as.character(ans)
 	if (ans=="no") return()
 	
-	##################################################################################################################
-	############################### Initialization of some variables #################################################
-	##################################################################################################################
-	img1 <<- NULL
-	img2 <<- NULL
-	img3 <<- NULL
-	img4 <<- NULL
-	visualBands1 <<- c(1,2,3)
-	visualBands2 <<- c(1,2,3)
-	AVIRISbands1 <<- NULL
-	AVIRISbands2 <<- NULL
-	imageType1 <<- NULL
-	imageType2 <<- NULL
-	numbands1 <<- 0
-	numbands2 <<- 0
-	regionsList <<- list()
-	regionType <<- NULL
-	regionPointsX <<- NULL
-	regionPointsY <<- NULL
-	LANfile <<- NULL
-	##################################################################################################################
+	
 	
 	##################################################################################################################
 	###################################### Main window ###############################################################
@@ -797,9 +885,12 @@ RIPAgui <- function(){
 	tt <- tktoplevel()
 	tkwm.resizable(tt,0,0)
 	tktitle(tt)<-"Image Processing and Analysis in R"
-	tn <<- ttknotebook(tt)
-	tkpack(tn)
-	tkconfigure(tn,width=1015,height=670)
+
+	assign('tn',ttknotebook(tt),envir=ripaEnv)
+	tkpack(get('tn',envir=ripaEnv))
+	tn_local <- get('tn',envir=ripaEnv)
+	tkconfigure(tn_local,width=1015,height=670)
+	assign('tn',tn_local,envir=ripaEnv)
 	##################################################################################################################
 	
 	##################################################################################################################
@@ -808,94 +899,105 @@ RIPAgui <- function(){
 	
 	#################################### Auxiliar Funcitions #########################################################
 	
+
 	# Function to build histograms of the region bands
 	regionBands <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		
+
+		tab <- checkTab()
 	
-		if (aux==".1.1.1"){
+		if (tab=="1"){
 			tkmessageBox(title="Error",message="Please, use this function only with the second tab!",icon="error",type="ok")
 			return()
 		}
 		
-		if (length(regionsList)==0){
+		if (length(get('regionsList',envir=ripaEnv))==0){
 			tkmessageBox(title="Error",message="Please, select at least one region in order to use it!",icon="error",type="ok")
 			return()
 		}
 		build1 <- function(){
-			ttregionsbands1<<-tktoplevel()
-			tkwm.geometry(ttregionsbands1,"+400+700")
-			tkwm.resizable(ttregionsbands1,0,0)
-			tktitle(ttregionsbands1)<<-"Regions"
-			
-			scr1 <- tkscrollbar(ttregionsbands1, repeatinterval=5, command=function(...)tkyview(tl1,...))
-			tl1<-tklistbox(ttregionsbands1,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr1,...),background="white")
-			tkgrid(tklabel(ttregionsbands1,text="Choose the region"))
+			assign('ttregionsbands1',tktoplevel(),envir=ripaEnv)
+			ttregionsbands1_local <- get('ttregionsbands1',envir=ripaEnv)
+			tkwm.geometry(ttregionsbands1_local,"+400+700")
+			tkwm.resizable(ttregionsbands1_local,0,0)
+			tktitle(ttregionsbands1_local)<-"Regions"
+						
+			scr1 <- tkscrollbar(ttregionsbands1_local, repeatinterval=5, command=function(...)tkyview(tl1,...))
+			tl1<-tklistbox(ttregionsbands1_local,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr1,...),background="white")
+			tkgrid(tklabel(ttregionsbands1_local,text="Choose the region"))
 			tkgrid(tl1,scr1)
 			tkgrid.configure(scr1,rowspan=6,sticky="nsw")
+			assign('ttregionsbands1',ttregionsbands1_local,envir=ripaEnv)
 			
-			regions <- names(regionsList)
+			regions <- names(get('regionsList',envir=ripaEnv))
 			
-			for (i in (1:length(regionsList))){
+			for (i in (1:length(get('regionsList',envir=ripaEnv)))){
 				tkinsert(tl1,"end",regions[i])
 			}
 			tkselection.set(tl1,0)
 			
 			OnOK1 <- function(){
-				regionChoice <<- as.numeric(tkcurselection(tl1))+1
-				tkdestroy(ttregionsbands1)
+				assign('regionChoice',as.numeric(tkcurselection(tl1))+1,envir=ripaEnv)
+				tkdestroy(get('ttregionsbands1',envir=ripaEnv))
 				build2()
 			}
 			
-			OK1.but <-tkbutton(ttregionsbands1,text="   OK   ",command=OnOK1)
+			OK1.but <-tkbutton(get('ttregionsbands1',envir=ripaEnv),text="   OK   ",command=OnOK1)
 			tkgrid(OK1.but)
-			tkfocus(ttregionsbands1)
+			tkfocus(get('ttregionsbands1',envir=ripaEnv))
 		}
 		
 		build2 <- function(){
-			ttregionsbands2<<-tktoplevel()
-			tkwm.geometry(ttregionsbands2,"+400+700")
-			tkwm.resizable(ttregionsbands2,0,0)
-			tktitle(ttregionsbands2)<<-"Bands"
-			
-			scr2 <- tkscrollbar(ttregionsbands2, repeatinterval=5, command=function(...)tkyview(tl2,...))
-			tl2<-tklistbox(ttregionsbands2,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr2,...),background="white")
-			tkgrid(tklabel(ttregionsbands2,text="Choose the band"))
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			assign('ttregionsbands2',tktoplevel(),envir=ripaEnv)
+
+			ttregionsbands2_local <- get('ttregionsbands2',envir=ripaEnv)
+			tkwm.geometry(ttregionsbands2_local,"+400+700")
+			tkwm.resizable(ttregionsbands2_local,0,0)
+			tktitle(ttregionsbands2_local)<-"Bands"
+		
+			scr2 <- tkscrollbar(ttregionsbands2_local, repeatinterval=5, command=function(...)tkyview(tl2,...))
+			tl2<-tklistbox(ttregionsbands2_local,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr2,...),background="white")
+			tkgrid(tklabel(ttregionsbands2_local,text="Choose the band"))
 			tkgrid(tl2,scr2)
 			tkgrid.configure(scr2,rowspan=6,sticky="nsw")
+			assign('ttregionsbands2',ttregionsbands2_local,envir=ripaEnv)
 			
 			bs <- NULL
-			for (i in 1:numbands2){
-				if (is.null(AVIRISbands2)) bs <- c(bs,paste("Band ",i,sep=""))
-				else bs <- c(bs,paste("Band ",AVIRISbands[i],sep=""))
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				if (is.null(AVIRISbands2_local)) bs <- c(bs,paste("Band ",i,sep=""))
+				else bs <- c(bs,paste("Band ",AVIRISbands2_local[i],sep=""))
 			}
 			
-			for (i in (1:numbands2)){
+			for (i in (1:get('numbands2',envir=ripaEnv))){
 				tkinsert(tl2,"end",bs[i])
 			}
 			tkselection.set(tl2,0)
 			
 			OnOK2 <- function(){
+				AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+				regionsList_local <- get('regionsList',envir=ripaEnv)
 				bandChoice <- as.numeric(tkcurselection(tl2))+1
-				tkdestroy(ttregionsbands2)
+				tkdestroy(get('ttregionsbands2',envir=ripaEnv))
 				
 				ttregionhist <- tktoplevel()
 				tkwm.geometry(ttregionhist,"+700+0")
 				tkwm.resizable(ttregionhist,0,0)
-				if (is.null(AVIRISbands2)){
-					tktitle(ttregionhist)<-paste("Region ",regionChoice," Band ",bandChoice,sep="")
-					histimage <-tkrplot(ttregionhist, function() hist(regionsList[[regionChoice]][[2]][[bandChoice]],main=paste("Band",bandChoice),100,xlab="Values"),vscale=1.04,hscale=0.98)
+				if (is.null(AVIRISbands2_local)){
+					tktitle(ttregionhist)<-paste("Region ",get('regionChoice',envir=ripaEnv)," Band ",bandChoice,sep="")
+					histimage <-tkrplot(ttregionhist, function() hist(regionsList_local[[get('regionChoice',envir=ripaEnv)]][[2]][[bandChoice]],main=paste("Band",bandChoice),100,xlab="Values"),vscale=1.04,hscale=0.98)
 				}
 				else{
-					tktitle(ttregionhist)<-paste("Region ",regionChoice," Band ",AVIRISbands2[bandChoice],sep="")
-					histimage <-tkrplot(ttregionhist, function() hist(regionsList[[regionChoice]][[2]][[bandChoice]],main=paste("Band",AVIRISbands2[bandChoice]),100,xlab="Values"),vscale=1.04,hscale=0.98)
+					tktitle(ttregionhist)<-paste("Region ",get('regionChoice',envir=ripaEnv)," Band ",AVIRISbands2_local[bandChoice],sep="")
+					histimage <-tkrplot(ttregionhist, function() hist(regionsList_local[[get('regionChoice',envir=ripaEnv)]][[2]][[bandChoice]],main=paste("Band",AVIRISbands2_local[bandChoice]),100,xlab="Values"),vscale=1.04,hscale=0.98)
 				}
 				
 				tkpack(histimage)
 				build1()
 			}
-			OK2.but <-tkbutton(ttregionsbands2,text="   OK   ",command=OnOK2)
+			OK2.but <-tkbutton(get('ttregionsbands2',envir=ripaEnv),text="   OK   ",command=OnOK2)
 			tkgrid(OK2.but)
-			tkfocus(ttregionsbands2)
+			tkfocus(get('ttregionsbands2',envir=ripaEnv))
 		}
 		build1()
 	}
@@ -903,101 +1005,117 @@ RIPAgui <- function(){
 	
 	# Function to build regions bands brushplots
 	regionBrush <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
-	
-		if (aux==".1.1.1"){
+		tab <- checkTab()
+		imageType2_local <- get('imageType2',envir=ripaEnv)
+
+		if (tab=="1"){
 			tkmessageBox(title="Error",message="Please, use this function only with the second tab!",icon="error",type="ok")
 			return()
 		}
 		
-		if (length(regionsList)==0){
+		if (length(get('regionsList',envir=ripaEnv))==0){
 			tkmessageBox(title="Error",message="Please, select at least one region in order to use it!",icon="error",type="ok")
 			return()
 		}
 		
-		if (imageType2=="jpgGrey"){
+		if (imageType2_local=="jpgGrey"){
+			tkmessageBox(title="Error",message="Please, use this function with multiple bands images!",icon="error",type="ok")
+			return()
+		}
+
+		if (imageType2_local=="pngGrey"){
 			tkmessageBox(title="Error",message="Please, use this function with multiple bands images!",icon="error",type="ok")
 			return()
 		}
 		
 		build1 <- function(){
-			ttregionsbands1<<-tktoplevel()
-			tkwm.geometry(ttregionsbands1,"+400+700")
-			tkwm.resizable(ttregionsbands1,0,0)
-			tktitle(ttregionsbands1)<-"Regions"
+			assign('ttregionsbands1',tktoplevel(),envir=ripaEnv)
+			ttregionsbands1_local <- get('ttregionsbands1',envir=ripaEnv)
+			tkwm.geometry(ttregionsbands1_local,"+400+700")
+			tkwm.resizable(ttregionsbands1_local,0,0)
+			tktitle(ttregionsbands1_local)<-"Regions"
 			
-			scr1 <- tkscrollbar(ttregionsbands1, repeatinterval=5, command=function(...)tkyview(tl1,...))
-			tl1<-tklistbox(ttregionsbands1,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr1,...),background="white")
-			tkgrid(tklabel(ttregionsbands1,text="Choose the region"))
+			scr1 <- tkscrollbar(ttregionsbands1_local, repeatinterval=5, command=function(...)tkyview(tl1,...))
+			tl1<-tklistbox(ttregionsbands1_local,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr1,...),background="white")
+			tkgrid(tklabel(ttregionsbands1_local,text="Choose the region"))
 			tkgrid(tl1,scr1)
 			tkgrid.configure(scr1,rowspan=6,sticky="nsw")
+			assign('ttregionsbands1',ttregionsbands1_local,envir=ripaEnv)
 			
-			regions <- names(regionsList)
+			regions <- names(get('regionsList',envir=ripaEnv))
 			
-			for (i in (1:length(regionsList))){
+			for (i in (1:length(get('regionsList',envir=ripaEnv)))){
 				tkinsert(tl1,"end",regions[i])
 			}
 			tkselection.set(tl1,0)
 			
 			OnOK1 <- function(){
-				regionChoice <<- as.numeric(tkcurselection(tl1))+1
-				tkdestroy(ttregionsbands1)
+				assign('regionChoice',as.numeric(tkcurselection(tl1))+1,envir=ripaEnv)
+				tkdestroy(get('ttregionsbands1',envir=ripaEnv))
 				build2()
 			}
 			
-			OK1.but <-tkbutton(ttregionsbands1,text="   OK   ",command=OnOK1)
+			OK1.but <-tkbutton(get('ttregionsbands1',envir=ripaEnv),text="   OK   ",command=OnOK1)
 			tkgrid(OK1.but)
-			tkfocus(ttregionsbands1)
+			tkfocus(get('ttregionsbands1',envir=ripaEnv))
 		}
 		
 		build2 <- function(){
-			ttregionsbands2<<-tktoplevel()
-			tkwm.geometry(ttregionsbands2,"+400+700")
-			tkwm.resizable(ttregionsbands2,0,0)
-			tktitle(ttregionsbands2)<-"Bands"
+			assign('ttregionsbands2',tktoplevel(),envir=ripaEnv)
+			ttregionsbands2_local <- get('ttregionsbands2',envir=ripaEnv)
+			tkwm.geometry(ttregionsbands2_local,"+400+700")
+			tkwm.resizable(ttregionsbands2_local,0,0)
+			tktitle(ttregionsbands2_local)<-"Bands"
 			
-			scr2 <- tkscrollbar(ttregionsbands2, repeatinterval=5, command=function(...)tkyview(tl2,...))
-			tl2<-tklistbox(ttregionsbands2,height=6,width=30,selectmode="multiple",yscrollcommand=function(...)tkset(scr2,...),background="white")
-			tkgrid(tklabel(ttregionsbands2,text="Choose the bands"))
+			scr2 <- tkscrollbar(ttregionsbands2_local, repeatinterval=5, command=function(...)tkyview(tl2,...))
+			tl2<-tklistbox(ttregionsbands2_local,height=6,width=30,selectmode="multiple",yscrollcommand=function(...)tkset(scr2,...),background="white")
+			tkgrid(tklabel(ttregionsbands2_local,text="Choose the bands"))
 			tkgrid(tl2,scr2)
 			tkgrid.configure(scr2,rowspan=6,sticky="nsw")
 			
+			assign('ttregionsbands2',ttregionsbands2_local,envir=ripaEnv)
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+
 			bs <- NULL
-			for (i in 1:numbands2){
-				if (is.null(AVIRISbands2)) bs <- c(bs,paste("Band ",i,sep=""))
-				else bs <- c(bs,paste("Band ",AVIRISbands2[i],sep=""))
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				if (is.null(AVIRISbands2_local)) bs <- c(bs,paste("Band ",i,sep=""))
+				else bs <- c(bs,paste("Band ",AVIRISbands2_local[i],sep=""))
 			}
 			
-			for (i in (1:numbands2)){
+			for (i in (1:get('numbands2',envir=ripaEnv))){
 				tkinsert(tl2,"end",bs[i])
 			}
 			tkselection.set(tl2,0)
 			
 			OnOK2 <- function(){
+				AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+				regionsList_local <- get('regionsList',envir=ripaEnv)
 				bandChoice <- as.vector(as.numeric(tkcurselection(tl2)))+1
-				tkdestroy(ttregionsbands2)
+				tkdestroy(get('ttregionsbands2',envir=ripaEnv))
 				if (length(bandChoice)==1){
 					tkmessageBox(title="Error",message="Please, choose at least two bands!",icon="error",type="ok")
 					return()
 				}
 				bs <- NULL
 				for (i in 1:length(bandChoice)){
-					if (is.null(AVIRISbands2)) bs <- c(bs,paste("Band ",bandChoice[i],sep=""))
-					else bs <- c(bs,paste("Band ",AVIRISbands2[bandChoice[i]],sep=""))
+					if (is.null(AVIRISbands2_local)) bs <- c(bs,paste("Band ",bandChoice[i],sep=""))
+					else bs <- c(bs,paste("Band ",AVIRISbands2_local[bandChoice[i]],sep=""))
 				}
-				bandsValues <<- matrix(nrow=length(regionsList[[regionChoice]][[2]][[1]]),ncol=length(bandChoice))
+				assign('bandsValues',matrix(nrow=length(regionsList_local[[get('regionChoice',envir=ripaEnv)]][[2]][[1]]),ncol=length(bandChoice)),envir=ripaEnv)
+				bandsValues_local <- get('bandsValues',envir=ripaEnv)
 				for (i in 1:length(bandChoice)){
-					bandsValues[,i]<<-regionsList[[regionChoice]][[2]][[bandChoice[i]]]
+					bandsValues_local[,i]<-regionsList_local[[get('regionChoice',envir=ripaEnv)]][[2]][[bandChoice[i]]]
 				}
-				bandsValues <<- as.data.frame(bandsValues)
-				names(bandsValues)<<-bs
-				pairs(bandsValues,pch=".")
+				bandsValues_local <- as.data.frame(bandsValues_local)
+				names(bandsValues_local)<-bs
+				pairs(bandsValues_local,pch=".")
+				assign('bandsValues',bandsValues_local,envir=ripaEnv)
 				
 				build1()
 			}
-			OK2.but <-tkbutton(ttregionsbands2,text="   OK   ",command=OnOK2)
+			OK2.but <-tkbutton(get('ttregionsbands2',envir=ripaEnv),text="   OK   ",command=OnOK2)
 			tkgrid(OK2.but)
-			tkfocus(ttregionsbands2)
+			tkfocus(get('ttregionsbands2',envir=ripaEnv))
 		}
 		build1()
 	}
@@ -1005,45 +1123,17 @@ RIPAgui <- function(){
 	
 	# Function to build bands brushplots
 	brush <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
-	
-		if ((aux==".1.1.1" && imageType1=="jpgGrey") || (aux==".1.1.2" && imageType2=="jpgGrey")){
+		tab <- checkTab()
+		imageType1_local <- get('imageType1',envir=ripaEnv)
+		imageType2_local <- get('imageType2',envir=ripaEnv)		
+
+		if ((tab=="1" && (imageType1_local=="jpgGrey" || imageType1_local=="pngGrey")) || (tab=="2" && (imageType2_local=="jpgGrey" || imageType2_local=="pngGrey"))){
 			tkmessageBox(title="Error",message="Please, use this function with multiple bands images!",icon="error",type="ok")
 			return()
 		}
-		
-		#build1 <- function(){
-		#	ttregionsbands1<<-tktoplevel()
-		#	tkwm.geometry(ttregionsbands1,"+400+700")
-		#	tkwm.resizable(ttregionsbands1,0,0)
-		#	tktitle(ttregionsbands1)<-"Regions"
-		#	
-		#	scr1 <- tkscrollbar(ttregionsbands1, repeatinterval=5, command=function(...)tkyview(tl1,...))
-		#	tl1<-tklistbox(ttregionsbands1,height=6,width=30,selectmode="single",yscrollcommand=function(...)tkset(scr1,...),background="white")
-		#	tkgrid(tklabel(ttregionsbands1,text="Choose the region"))
-		#	tkgrid(tl1,scr1)
-		#	tkgrid.configure(scr1,rowspan=6,sticky="nsw")
-		#	
-		#	regions <- names(regionsList)
-		#	
-		#	for (i in (1:length(regionsList))){
-		#		tkinsert(tl1,"end",regions[i])
-		#	}
-		#	tkselection.set(tl1,0)
-		#	
-		#	OnOK1 <- function(){
-		#		regionChoice <<- as.numeric(tkcurselection(tl1))+1
-		#		tkdestroy(ttregionsbands1)
-# 				build2()
-# 			}
-# 			
-# 			OK1.but <-tkbutton(ttregionsbands1,text="   OK   ",command=OnOK1)
-# 			tkgrid(OK1.but)
-# 			tkfocus(ttregionsbands1)
-# 		}
-		
+			
 		build2 <- function(){
-			ttbands<<-tktoplevel()
+			ttbands <- tktoplevel()
 			tkwm.geometry(ttbands,"+400+700")
 			tkwm.resizable(ttbands,0,0)
 			tktitle(ttbands)<-"Bands"
@@ -1055,78 +1145,84 @@ RIPAgui <- function(){
 			tkgrid.configure(scr,rowspan=6,sticky="nsw")
 			
 			bs <- NULL
-			if (aux==".1.1.1"){
-				for (i in 1:numbands1){
-					if (is.null(AVIRISbands1)) bs <- c(bs,paste("Band ",i,sep=""))
-					else bs <- c(bs,paste("Band ",AVIRISbands1[i],sep=""))
+
+			tab <- checkTab()
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
+	
+			
+			if (tab=="1"){
+				
+				for (i in 1:get('numbands1',envir=ripaEnv)){
+					if (is.null(AVIRISbands1_local)) bs <- c(bs,paste("Band ",i,sep=""))
+					else bs <- c(bs,paste("Band ",AVIRISbands1_local[i],sep=""))
 				}
 			}
 			else{
-				for (i in 1:numbands2){
-					if (is.null(AVIRISbands2)) bs <- c(bs,paste("Band ",i,sep=""))
-					else bs <- c(bs,paste("Band ",AVIRISbands2[i],sep=""))
+				for (i in 1:get('numbands2',envir=ripaEnv)){
+					if (is.null(AVIRISbands2_local)) bs <- c(bs,paste("Band ",i,sep=""))
+					else bs <- c(bs,paste("Band ",AVIRISbands2_local[i],sep=""))
 				}
 			}
-			if (aux==".1.1.1") N=numbands1
-			else N=numbands2
+			if (tab=="1") N=get('numbands1',envir=ripaEnv)
+			else N=get('numbands2',envir=ripaEnv)
 			for (i in (1:N)){
 				tkinsert(tl,"end",bs[i])
 			}
 			tkselection.set(tl,0)
 			
-			OnOK <- function(){
+			OnOK <- function(tt){
+				AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
+				AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+				bands_local <- get('bands',envir=ripaEnv)
 				bandChoice <- as.vector(as.numeric(tkcurselection(tl)))+1
-				tkdestroy(ttbands)
+				tkdestroy(tt)
 				if (length(bandChoice)==1){
 					tkmessageBox(title="Error",message="Please, choose at least two bands!",icon="error",type="ok")
 					return()
 				}
 				bs <- NULL
-				if (aux==".1.1.1"){
+				if (tab=="1"){
 					for (i in 1:length(bandChoice)){
-						if (is.null(AVIRISbands1)) bs <- c(bs,paste("Band ",bandChoice[i],sep=""))
-						else bs <- c(bs,paste("Band ",AVIRISbands1[bandChoice[i]],sep=""))
+						if (is.null(AVIRISbands1_local)) bs <- c(bs,paste("Band ",bandChoice[i],sep=""))
+						else bs <- c(bs,paste("Band ",AVIRISbands1_local[bandChoice[i]],sep=""))
 					}
 				}
 				else{
 					for (i in 1:length(bandChoice)){
-						if (is.null(AVIRISbands2)) bs <- c(bs,paste("Band ",bandChoice[i],sep=""))
-						else bs <- c(bs,paste("Band ",AVIRISbands2[bandChoice[i]],sep=""))
+						if (is.null(AVIRISbands2_local)) bs <- c(bs,paste("Band ",bandChoice[i],sep=""))
+						else bs <- c(bs,paste("Band ",AVIRISbands2_local[bandChoice[i]],sep=""))
 					}
 				}
-# 				if (aux==".1.1.1"){
-# 					if (!is.null(AVIRISbands1)) bandsValues <<- matrix(nrow=nrow(bands[[1]]@data),ncol=ncol(bands[[1]]@data))
-# 					else bandsValues <<- matrix(nrow=nrow(img1),ncol=ncol(img1))
-# 				}
-# 				else{
-# 					if (!is.null(AVIRISbands2)) bandsValues <<- matrix(nrow=nrow(bands[[1]]@data),ncol=ncol(bands[[1]]@data))
-# 					else bandsValues <<- matrix(nrow=nrow(img3),ncol=ncol(img3))
-# 				}
-				if (aux==".1.1.1"){
-					if (is.null(AVIRISbands1)) bandsValues <<- data.frame(a=as.vector(img1[,,bandChoice[1]]))
-					else bandsValues <<- data.frame(a = as.vector(bands[[bandChoice[1]]]@data))
+				if (tab=="1"){
+					img1_local <- get('img1',envir=ripaEnv)
+					if (is.null(AVIRISbands1_local)) assign('bandsValues',data.frame(a=as.vector(img1_local[,,bandChoice[1]])),envir=ripaEnv)
+					else assign('bandsValues',data.frame(a = as.vector(bands_local[[bandChoice[1]]]@data)),envir=ripaEnv)
 				}
 				else{
-					if (is.null(AVIRISbands2)) bandsValues <<- data.frame(a=as.vector(img3[,,bandChoice[1]]))
-					else bandsValues <<- data.frame(a = as.vector(bands[[bandChoice[1]]]@data))
-				}				
+					img3_local <- get('img3',envir=ripaEnv)
+					if (is.null(AVIRISbands2_local)) assign('bandsValues',data.frame(a=as.vector(img3_local[,,bandChoice[1]])),envir=ripaEnv)
+					else assign('bandsValues',data.frame(a = as.vector(bands_local[[bandChoice[1]]]@data)),envir=ripaEnv)
+				}
+				img1_local <- get('img1',envir=ripaEnv)
+				img3_local <- get('img3',envir=ripaEnv)	
+				bandsValues_local <- get('bandsValues',envir=ripaEnv)	
 				for (i in 2:length(bandChoice)){
-					if (aux==".1.1.1"){
-						if (is.null(AVIRISbands1)) bandsValues[,i]<<-as.vector(img1[,,bandChoice[i]])
-						else bandsValues[,i] <<- as.vector(bands[[bandChoice[i]]]@data)
+					if (tab=="1"){		
+						if (is.null(AVIRISbands1_local)) bandsValues_local[,i]<-as.vector(img1_local[,,bandChoice[i]])
+						else bandsValues_local[,i] <- as.vector(bands_local[[bandChoice[i]]]@data)
 					}
 					else{
-						if (is.null(AVIRISbands2)) bandsValues[,i]<<-as.vector(img3[,,bandChoice[i]])
-						else bandsValues[,i] <<- as.vector(bands[[bandChoice[i]]]@data)
+						if (is.null(AVIRISbands2_local)) bandsValues_local[,i]<-as.vector(img3_local[,,bandChoice[i]])
+						else bandsValues_local[,i] <- as.vector(bands_local[[bandChoice[i]]]@data)
 					}
 				}
-				#bandsValues <<- as.data.frame(bandsValues)
-				names(bandsValues)<<-bs
-				pairs(bandsValues,pch=".")
+				names(bandsValues_local)<-bs
+				pairs(bandsValues_local,pch=".")
+				assign('bandsValues',bandsValues_local,envir=ripaEnv)
 				
-				#build1()
 			}
-			OK.but <-tkbutton(ttbands,text="   OK   ",command=OnOK)
+			OK.but <-tkbutton(ttbands,text="   OK   ",command=function()OnOK(ttbands))
 			tkgrid(OK.but)
 			tkfocus(ttbands)
 		}
@@ -1136,9 +1232,9 @@ RIPAgui <- function(){
 
 	# Function to shows bands histogram and statistics
 	imageBands <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 	
-		if ((aux==".1.1.1" && is.null(img1)) || (aux==".1.1.2" && is.null(img3)) ){
+		if ((tab=="1" && is.null(get('img1',envir=ripaEnv))) || (tab=="2" && is.null(get('img3',envir=ripaEnv))) ){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -1153,23 +1249,27 @@ RIPAgui <- function(){
 		tkgrid(tl,scr)
 		tkgrid.configure(scr,rowspan=6,sticky="nsw")
 		bands <- NULL
+
 		
-		if (aux==".1.1.1"){
-			for (i in 1:numbands1){
-				if (is.null(AVIRISbands1)) bands <- c(bands,paste("Band ",i,sep=""))
-				else bands <- c(bands,paste("Band ",AVIRISbands1[i],sep=""))
+		if (tab=="1"){
+			AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
+			
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				if (is.null(AVIRISbands1_local)) bands <- c(bands,paste("Band ",i,sep=""))
+				else bands <- c(bands,paste("Band ",AVIRISbands1_local[i],sep=""))
 			}
-			for (i in (1:numbands1)){
+			for (i in (1:get('numbands1',envir=ripaEnv))){
 				tkinsert(tl,"end",bands[i])
 			}
 		}
 		
-		if (aux==".1.1.2"){
-			for (i in 1:numbands2){
-				if (is.null(AVIRISbands2)) bands <- c(bands,paste("Band ",i,sep=""))
-				else bands <- c(bands,paste("Band ",AVIRISbands2[i],sep=""))
+		if (tab=="2"){
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				if (is.null(AVIRISbands2_local)) bands <- c(bands,paste("Band ",i,sep=""))
+				else bands <- c(bands,paste("Band ",AVIRISbands2_local[i],sep=""))
 			}
-			for (i in (1:numbands2)){
+			for (i in (1:get('numbands2',envir=ripaEnv))){
 				tkinsert(tl,"end",bands[i])
 			}
 		}
@@ -1178,85 +1278,90 @@ RIPAgui <- function(){
 		
 		OnOK <- function(){
 			bandChoice <- as.numeric(tkcurselection(tl))+1
-			
-			aux <- tclvalue(tcl(tn,"select"))
-			
+			AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			tab <- checkTab()
+		
 			ttstatistics<-tktoplevel()
 			tkwm.geometry(ttstatistics,"+0+700")
 			tkwm.resizable(ttstatistics,0,0)
-			if (aux==".1.1.1"){
-				if (is.null(AVIRISbands1)) tktitle(ttstatistics)<-paste("Band ",bandChoice," statistics",sep="")
-				else tktitle(ttstatistics)<-paste("Band ",AVIRISbands1[bandChoice]," statistics",sep="")
+			if (tab=="1"){
+				if (is.null(AVIRISbands1_local)) tktitle(ttstatistics)<-paste("Band ",bandChoice," statistics",sep="")
+				else tktitle(ttstatistics)<-paste("Band ",AVIRISbands1_local[bandChoice]," statistics",sep="")
 			}
-			if (aux==".1.1.2"){
-				if (is.null(AVIRISbands2)) tktitle(ttstatistics)<-paste("Band ",bandChoice," statistics",sep="")
-				else tktitle(ttstatistics)<-paste("Band ",AVIRISbands2[bandChoice]," statistics",sep="")
+			if (tab=="2"){
+				if (is.null(AVIRISbands2_local)) tktitle(ttstatistics)<-paste("Band ",bandChoice," statistics",sep="")
+				else tktitle(ttstatistics)<-paste("Band ",AVIRISbands2_local[bandChoice]," statistics",sep="")
 			}
 			scr <- tkscrollbar(ttstatistics, repeatinterval=5,command=function(...)tkyview(txt,...))
 			txt <- tktext(ttstatistics,bg="white",font="courier",width=40,height=10,yscrollcommand=function(...)tkset(scr,...))
 			tkgrid(txt,scr)
 			tkgrid.configure(scr,sticky="ns")
 			
-			if (aux==".1.1.1"){
+			
+
+			if (tab=="1"){
 				ttband <- tktoplevel()
 				tkwm.geometry(ttband,"+0+0")
 				tkwm.resizable(ttband,0,0)
-				if (is.null(AVIRISbands1)) tktitle(ttband)<-paste("Band ",bandChoice,sep="")
-				else tktitle(ttband)<-paste("Band ",AVIRISbands1[bandChoice],sep="")
-				bandimage <-tkrplot(ttband, function() plot(imagematrix(img1[,,bandChoice])),vscale=1.04,hscale=0.98)
+				if (is.null(AVIRISbands1_local)) tktitle(ttband)<-paste("Band ",bandChoice,sep="")
+				else tktitle(ttband)<-paste("Band ",AVIRISbands1_local[bandChoice],sep="")
+				img1_local <- get('img1',envir=ripaEnv)
+				bandimage <-tkrplot(ttband, function() plot(imagematrix(img1_local[,,bandChoice])),vscale=1.04,hscale=0.98)
 				tkpack(bandimage)
 				
-				nR <- length(img1[,,bandChoice])
-				minR <- min(img1[,,bandChoice])
-				maxR <- max(img1[,,bandChoice])
-				meanR <- mean(img1[,,bandChoice])
-				medianR <- median(img1[,,bandChoice])
-				deviationR <- sd(as.vector(img1[,,bandChoice]))
-				mDeviationR <- mad(img1[,,bandChoice])
-				kurtosisR <- kurtosis(as.vector(img1[,,bandChoice]))
-				skewnessR <- skewness(as.vector(img1[,,bandChoice]))
+				nR <- length(img1_local[,,bandChoice])
+				minR <- min(img1_local[,,bandChoice])
+				maxR <- max(img1_local[,,bandChoice])
+				meanR <- mean(img1_local[,,bandChoice])
+				medianR <- median(img1_local[,,bandChoice])
+				deviationR <- sd(as.vector(img1_local[,,bandChoice]))
+				mDeviationR <- mad(img1_local[,,bandChoice])
+				kurtosisR <- kurtosis(as.vector(img1_local[,,bandChoice]))
+				skewnessR <- skewness(as.vector(img1_local[,,bandChoice]))
 				
 				ttbandhist <- tktoplevel()
 				tkwm.geometry(ttbandhist,"+500+0")
 				tkwm.resizable(ttbandhist,0,0)
-				if (is.null(AVIRISbands1)){
+				if (is.null(AVIRISbands1_local)){
 					tktitle(ttbandhist)<-paste("Band ",bandChoice,sep="")
-					histimage <-tkrplot(ttbandhist, function() hist(img1[,,bandChoice],main=paste("Band",bandChoice),100,xlab="Values"),vscale=1.04,hscale=0.98)
+					histimage <-tkrplot(ttbandhist, function() hist(img1_local[,,bandChoice],main=paste("Band",bandChoice),100,xlab="Values"),vscale=1.04,hscale=0.98)
 				}
 				else{
-					tktitle(ttbandhist)<-paste("Band ",AVIRISbands1[bandChoice],sep="")
-					histimage <-tkrplot(ttbandhist, function() hist(img1[,,bandChoice],main=paste("Band",AVIRISbands1[bandChoice]),100,xlab="Values"),vscale=1.04,hscale=0.98)
+					tktitle(ttbandhist)<-paste("Band ",AVIRISbands1_local[bandChoice],sep="")
+					histimage <-tkrplot(ttbandhist, function() hist(img1_local[,,bandChoice],main=paste("Band",AVIRISbands1_local[bandChoice]),100,xlab="Values"),vscale=1.04,hscale=0.98)
 				}
 				tkpack(histimage)
 			}
-			if (aux==".1.1.2"){
+			if (tab=="2"){
+				img3_local <- get('img3',envir=ripaEnv)
 				ttband <- tktoplevel()
 				tkwm.geometry(ttband,"+0+0")
 				tkwm.resizable(ttband,0,0)
-				if (is.null(AVIRISbands2)) tktitle(ttband)<-paste("Band ",bandChoice,sep="")
-				else tktitle(ttband)<-paste("Band ",AVIRISbands2[bandChoice],sep="")
-				bandimage <-tkrplot(ttband, function() plot(imagematrix(img3[,,bandChoice])),vscale=1.04,hscale=0.98)
+				if (is.null(AVIRISbands2_local)) tktitle(ttband)<-paste("Band ",bandChoice,sep="")
+				else tktitle(ttband)<-paste("Band ",AVIRISbands2_local[bandChoice],sep="")
+				bandimage <-tkrplot(ttband, function() plot(imagematrix(img3_local[,,bandChoice])),vscale=1.04,hscale=0.98)
 				tkpack(bandimage)
 				
-				nR <- length(img3[,,bandChoice])
-				minR <- min(img3[,,bandChoice])
-				maxR <- max(img3[,,bandChoice])
-				meanR <- mean(img3[,,bandChoice])
-				medianR <- median(img3[,,bandChoice])
-				deviationR <- sd(as.vector(img3[,,bandChoice]))
-				mDeviationR <- mad(img3[,,bandChoice])
-				kurtosisR <- kurtosis(as.vector(img3[,,bandChoice]))
-				skewnessR <- skewness(as.vector(img3[,,bandChoice]))
+				nR <- length(img3_local[,,bandChoice])
+				minR <- min(img3_local[,,bandChoice])
+				maxR <- max(img3_local[,,bandChoice])
+				meanR <- mean(img3_local[,,bandChoice])
+				medianR <- median(img3_local[,,bandChoice])
+				deviationR <- sd(as.vector(img3_local[,,bandChoice]))
+				mDeviationR <- mad(img3_local[,,bandChoice])
+				kurtosisR <- kurtosis(as.vector(img3_local[,,bandChoice]))
+				skewnessR <- skewness(as.vector(img3_local[,,bandChoice]))
 				
 				ttbandhist <- tktoplevel()
 				tkwm.geometry(ttbandhist,"+500+0")
 				tkwm.resizable(ttbandhist,0,0)
-				if (is.null(AVIRISbands2)){
+				if (is.null(AVIRISbands2_local)){
 					tktitle(ttbandhist)<-paste("Band ",bandChoice,sep="")
-					histimage <-tkrplot(ttbandhist, function() hist(img3[,,bandChoice],main=paste("Band",bandChoice),100,xlab="Values"),vscale=1.04,hscale=0.98)
+					histimage <-tkrplot(ttbandhist, function() hist(img3_local[,,bandChoice],main=paste("Band",bandChoice),100,xlab="Values"),vscale=1.04,hscale=0.98)
 				} else{
-					tktitle(ttbandhist)<-paste("Band ",AVIRISbands2[bandChoice],sep="")
-					histimage <-tkrplot(ttbandhist, function() hist(img3[,,bandChoice],main=paste("Band",AVIRISbands2[bandChoice]),100,xlab="Values"),vscale=1.04,hscale=0.98)
+					tktitle(ttbandhist)<-paste("Band ",AVIRISbands2_local[bandChoice],sep="")
+					histimage <-tkrplot(ttbandhist, function() hist(img3_local[,,bandChoice],main=paste("Band",AVIRISbands2_local[bandChoice]),100,xlab="Values"),vscale=1.04,hscale=0.98)
 				}
 				tkpack(histimage)
 			}
@@ -1283,24 +1388,25 @@ RIPAgui <- function(){
 	
 	# Function to calculate the covariance matrix of a region
 	covMatrix <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
-	
-		if (aux==".1.1.1"){
+		tab <- checkTab()
+		imageType2_local <- get('imageType2',envir=ripaEnv)		
+
+		if (tab=="1"){
 			tkmessageBox(title="Error",message="Please, use this function only with the second tab!",icon="error",type="ok")
 			return()
 		}
 		
-		if (is.null(imageType2)){
+		if (is.null(imageType2_local)){
 			tkmessageBox(title="Error",message="Please, open an image in oder to use it!",icon="error",type="ok")
 			return()
 		}
 		
-		if (length(regionsList)==0){
+		if (length(get('regionsList',envir=ripaEnv))==0){
 			tkmessageBox(title="Error",message="Please, select at least one region in order to use it!",icon="error",type="ok")
 			return()
 		}
 		
-		if (imageType2=="jpgGrey"){
+		if (imageType2_local=="jpgGrey" || imageType2_local=="pngGrey"){
 			tkmessageBox(title="Error",message="Please, use this function only with multiple bands images!",icon="error",type="ok")
 			return()
 		}
@@ -1316,25 +1422,28 @@ RIPAgui <- function(){
 		tkgrid(tl,scr)
 		tkgrid.configure(scr,rowspan=6,sticky="nsw")
 		
-		regions <- as.vector(names(regionsList))
+		regions <- as.vector(names(get('regionsList',envir=ripaEnv)))
 		
-		for (i in (1:length(regionsList))){
+		for (i in (1:length(get('regionsList',envir=ripaEnv)))){
 			tkinsert(tl,"end",regions[i])
 		}
 		tkselection.set(tl,0)
 		
 		OnOK <- function(){
-			regionChoice <- as.numeric(tkcurselection(tl))+1
+
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			regionsList_local <- get('regionsList',envir=ripaEnv)
+			assign('regionChoice',as.numeric(tkcurselection(tl))+1,envir=ripaEnv)
 			tkdestroy(ttregions)
 			bands <- NULL
-			for (i in 1:numbands2){
-				if (is.null(AVIRISbands2)) bands <- c(bands,paste("Band ",i,sep=""))
-				else bands <- c(bands,paste("Band ",AVIRISbands2[i],sep=""))
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				if (is.null(AVIRISbands2_local)) bands <- c(bands,paste("Band ",i,sep=""))
+				else bands <- c(bands,paste("Band ",AVIRISbands2_local[i],sep=""))
 			}
 			
-			Matrix <- matrix(nrow=length(regionsList[[regionChoice]][[2]][[1]]),ncol=numbands2)
-			for (i in 1:numbands2){
-				Matrix[,i]<-regionsList[[regionChoice]][[2]][[i]]
+			Matrix <- matrix(nrow=length(regionsList_local[[get('regionChoice',envir=ripaEnv)]][[2]][[1]]),ncol=get('numbands2',envir=ripaEnv))
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				Matrix[,i]<-regionsList_local[[get('regionChoice',envir=ripaEnv)]][[2]][[i]]
 			}
 			Matrix <- as.data.frame(Matrix)
 			names(Matrix)<-bands
@@ -1356,15 +1465,14 @@ RIPAgui <- function(){
 				return (table)
 			}
 			tclArray <- tclArray()
-			#col <- ncol(regionsList[[regionChoice]][[3]])
-			for (i in 1:numbands2) tclArray[[0,i]] <- names(Matrix)[i]
-			for (i in 1:numbands2) tclArray[[i,0]] <- names(Matrix)[i]
-			for (i in 1:numbands2){
-				for (j in 1:numbands2){
+			for (i in 1:get('numbands2',envir=ripaEnv)) tclArray[[0,i]] <- names(Matrix)[i]
+			for (i in 1:get('numbands2',envir=ripaEnv)) tclArray[[i,0]] <- names(Matrix)[i]
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				for (j in 1:get('numbands2',envir=ripaEnv)){
 					tclArray[[i,j]] <- covMat[i,j]
 				}
 			}
-			table <- displayInTable(tclArray,title=paste("Covariance Matrix ","(Region ",regionChoice,")"),nrow=numbands2+1,ncol=numbands2+1)
+			table <- displayInTable(tclArray,title=paste("Covariance Matrix ","(Region ",get('regionChoice',envir=ripaEnv),")"),nrow=get('numbands2',envir=ripaEnv)+1,ncol=get('numbands2',envir=ripaEnv)+1)
 			
 			tkconfigure(table, state="disabled")
 		}
@@ -1377,20 +1485,22 @@ RIPAgui <- function(){
 	
 	# Function to change the actual visual bands
 	changeBands <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
+		imageType1_local <- get('imageType1',envir=ripaEnv)		
+		imageType2_local <- get('imageType2',envir=ripaEnv)		
 	
-		if ((aux==".1.1.1" && is.null(imageType1)) || (aux==".1.1.2" && is.null(imageType2))){
+		if ((tab=="1" && is.null(imageType1_local)) || (tab=="2" && is.null(imageType2_local))){
 			tkmessageBox(title="Error",message="Please, open an image in oder to use it!",icon="error",type="ok")
 			return()
 		}
 		
-		if ((aux==".1.1.1" && imageType1=="jpgGrey") || (aux==".1.1.2" && imageType2=="jpgGrey") || (aux==".1.1.1" && numbands1==3) || (aux==".1.1.2" && numbands2==3)){
+		if ((tab=="1" && (imageType1_local=="jpgGrey" || imageType1_local=="pngGrey")) || (tab=="2" && (imageType2_local=="jpgGrey" || imageType2_local=="pngGrey")) || (tab=="1" && get('numbands1',envir=ripaEnv)==3) || (tab=="2" && get('numbands2',envir=ripaEnv)==3)){
 			tkmessageBox(title="Error",message="Please, use this function with more than three bands images!",icon="error",type="ok")
 			return()
 		}
 		
-		if (aux==".1.1.1") visualBands1<<-NULL
-		if (aux==".1.1.2") visualBands2<<-NULL
+		if (tab=="1") assign('visualBands1',NULL,envir=ripaEnv)
+		if (tab=="2") assign('visualBands2',NULL,envir=ripaEnv)
 		
 		build <- function(count){
 			ttregions<-tktoplevel()
@@ -1405,20 +1515,22 @@ RIPAgui <- function(){
 			tkgrid.configure(scr,rowspan=6,sticky="nsw")
 			
 			bands <- NULL
-			if (aux==".1.1.1"){
-				for (i in 1:numbands1){
-					if (is.null(AVIRISbands1)) bands <- c(bands,paste("Band ",i,sep=""))
-					else bands <- c(bands,paste("Band ",AVIRISbands1[i],sep=""))
+			AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			if (tab=="1"){
+				for (i in 1:get('numbands1',envir=ripaEnv)){
+					if (is.null(AVIRISbands1_local)) bands <- c(bands,paste("Band ",i,sep=""))
+					else bands <- c(bands,paste("Band ",AVIRISbands1_local[i],sep=""))
 				}
-				for (i in 1:numbands1)
+				for (i in 1:get('numbands1',envir=ripaEnv))
 					tkinsert(tl,"end",bands[i])
 			}
-			if (aux==".1.1.2"){
-				for (i in 1:numbands2){
-					if (is.null(AVIRISbands2)) bands <- c(bands,paste("Band ",i,sep=""))
-					else bands <- c(bands,paste("Band ",AVIRISbands2[i],sep=""))
+			if (tab=="2"){
+				for (i in 1:get('numbands2',envir=ripaEnv)){
+					if (is.null(AVIRISbands2_local)) bands <- c(bands,paste("Band ",i,sep=""))
+					else bands <- c(bands,paste("Band ",AVIRISbands2_local[i],sep=""))
 				}
-				for (i in 1:numbands2)
+				for (i in 1:get('numbands2',envir=ripaEnv))
 					tkinsert(tl,"end",bands[i])
 				
 			}
@@ -1428,26 +1540,34 @@ RIPAgui <- function(){
 			OnOK <- function(){
 				
 				choice <- as.numeric(tkcurselection(tl))+1
-				
+				visualBands1_local <- get('visualBands1',envir=ripaEnv)
+				visualBands2_local <- get('visualBands2',envir=ripaEnv)
 				if (count==2){
-					if ((aux==".1.1.1" && choice==visualBands1[1]) || (aux==".1.1.2" && choice==visualBands2[1])){
+					
+					if ((tab=="1" && choice==visualBands1_local[1]) || (tab=="2" && choice==visualBands2_local[1])){
 						tkmessageBox(title="Error",message="This band was already chosen! Please, select another band",icon="error",type="ok")
 						return()
 					}
 				}
 				
 				if (count==3){
-					if ((aux==".1.1.1" && choice==visualBands1[1]) || (aux==".1.1.2" && choice==visualBands2[1]) || (aux==".1.1.1" && choice==visualBands1[2]) || (aux==".1.1.2" && choice==visualBands2[2])){
+					if ((tab=="1" && choice==visualBands1_local[1]) || (tab=="2" && choice==visualBands2_local[1]) || (tab=="1" && choice==visualBands1_local[2]) || (tab=="2" && choice==visualBands2_local[2])){
 						tkmessageBox(title="Error",message="This band was already chosen! Please, select another band",icon="error",type="ok")
 						return()
 					}
 				}
-				if (aux==".1.1.1") visualBands1 <<- c(visualBands1,choice)
-				if (aux==".1.1.2") visualBands2 <<- c(visualBands2,choice)
+				if (tab=="1"){
+					visualBands1_local <- c(visualBands1_local,choice)
+					assign('visualBands1',c(visualBands1_local,choice),envir=ripaEnv)
+				}
+				if (tab=="2"){ 
+					visualBands2_local <- c(visualBands2_local,choice)
+					assign('visualBands2',c(visualBands2_local,choice),envir=ripaEnv)
+				}
 				tkdestroy(ttregions)
 				if (count!=3) build(count+1)
 				else{
-					if (aux==".1.1.1"){
+					if (tab=="1"){
 						tkdestroy(Frame3)
 						Frame3 <- tkframe(lb1,relief="groove",borderwidth=2)
 						tkconfigure(Frame3,width=485,height=510)
@@ -1458,23 +1578,26 @@ RIPAgui <- function(){
 						
 						tkdestroy(Frame1)
 						Frame1 <- tkframe(lb1,relief="groove",borderwidth=2)
-						tkconfigure(Frame1,width=485,height=510)
+						tkconfigure(Frame1,width=480,height=510)
 						tkplace(Frame1,x=10,y=30)
 						
 						Frame2 <- tkframe(Frame1,relief="groove",borderwidth=0)
 						tkplace(Frame2,x=1,y=1)
-						
-						auximg <- array(c(img1[,,visualBands1[1]],img1[,,visualBands1[2]],img1[,,visualBands1[3]]),c(nrow(img1),ncol(img1),numbands1))
-						
-						image <-tkrplot(Frame2, function() plot.imagematrix(imagematrix(auximg,type="rgb")),vscale=1.04,hscale=0.98)
+						img1_local <- get('img1',envir=ripaEnv)
+						auximg <- array(c(img1_local[,,visualBands1_local[1]],img1_local[,,visualBands1_local[2]],img1_local[,,visualBands1_local[3]]),c(nrow(img1_local),ncol(img1_local),3))
+
+						image <-tkrplot(Frame2, function() plot(imagematrix(auximg,type="rgb")),vscale=1.04,hscale=0.98)
 						tkpack(image)
-						auximg <- array(c(img2[,,visualBands1[1]],img2[,,visualBands1[2]],img2[,,visualBands1[3]]),c(nrow(img2),ncol(img2),numbands1))
-						image <-tkrplot(Frame4, function() plot.imagematrix(imagematrix(auximg,type="rgb")),vscale=1.04,hscale=0.98)
+
+						img2_local <- get('img2',envir=ripaEnv)
+						auximg <- array(c(img2_local[,,visualBands2_local[1]],img2_local[,,visualBands2_local[2]],img2_local[,,visualBands2_local[3]]),c(nrow(img2_local),ncol(img2_local),3))
+						image <-tkrplot(Frame4, function() plot(imagematrix(auximg,type="rgb")),vscale=1.04,hscale=0.98)
 						tkpack(image)
 					}
-					if (aux==".1.1.2"){
-						regionsList<<-list()
-						regionsListAux<<-list()
+					if (tab=="2"){
+						img3_local <- get('img3',envir=ripaEnv)
+						assign('regionsList',list(),envir=ripaEnv)
+						assign('regionsListAux',list(),envir=ripaEnv)
 						
 						tkconfigure(statisticsTxt,state="normal")
 						tkdelete(statisticsTxt,"1.0","end")
@@ -1483,14 +1606,13 @@ RIPAgui <- function(){
 						tkdestroy(Frame5)
 					
 						Frame5 <- tkframe(lb2,relief="groove",borderwidth=2)
-						tkconfigure(Frame5,width=485,height=510)
+						tkconfigure(Frame5,width=480,height=510)
 						tkplace(Frame5,x=10,y=30)
 				
 						Frame6 <- tkframe(Frame5,relief="groove",borderwidth=0)
 						tkplace(Frame6,x=1,y=1)
 						
-						auximg <- array(c(img3[,,visualBands2[1]],img3[,,visualBands2[2]],img3[,,visualBands2[3]]),c(nrow(img3),ncol(img3),numbands2))
-						
+						auximg <- array(c(img3_local[,,visualBands2_local[1]],img3_local[,,visualBands2_local[2]],img3_local[,,visualBands2_local[3]]),c(nrow(img3_local),ncol(img3_local),3))
 						image <-tkrplot(Frame6, function() plot.imagematrix(imagematrix(auximg,type="rgb",noclipping=TRUE)),vscale=1.04,hscale=0.98)
 						tkpack(image)
 					}
@@ -1508,9 +1630,11 @@ RIPAgui <- function(){
 	# Function for the brightness and contrast slider
 	sliderFunction <- function(){
 	
-		aux <- tclvalue(tcl(tn,"select"))
+		visualBands1_local <- get('visualBands1',envir=ripaEnv)
 
-		if ((is.null(img1) && aux==".1.1.1") || (is.null(img3) && aux==".1.1.2")){
+		tab <- checkTab()
+
+		if ((is.null(get('img1',envir=ripaEnv)) && tab=="1") || (is.null(get('img3',envir=ripaEnv)) && tab=="2")){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -1518,7 +1642,8 @@ RIPAgui <- function(){
 		cont <- (as.numeric(tclvalue(SliderValue2)))
 		bri <- as.numeric(tclvalue(SliderValue))
 		
-		img2 <<- contBriImg(img1,cont,bri)
+		assign('img2',contBriImg(get('img1',envir=ripaEnv),cont,bri),envir=ripaEnv)
+		img2_local <- get('img2',envir=ripaEnv)
 		
 		tkdestroy(Frame3)	
 		Frame3 <- tkframe(lb1,relief="groove",borderwidth=2)
@@ -1527,11 +1652,11 @@ RIPAgui <- function(){
 		Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 		tkplace(Frame4,x=1,y=1)
 		
-		if (numbands1>3){
-			auximg <- array(c(img2[,,visualBands1[1]],img2[,,visualBands1[2]],img2[,,visualBands1[3]]),c(nrow(img2),ncol(img2),numbands1))
+		if (get('numbands1',envir=ripaEnv)>3){
+			auximg <- array(c(img2_local[,,visualBands1_local[1]],img2_local[,,visualBands1_local[2]],img2_local[,,visualBands1_local[3]]),c(nrow(img2_local),ncol(img2_local),get('numbands1',envir=ripaEnv)))
 			image <-tkrplot(Frame4, function() plot(imagematrix(auximg)),vscale=1.04,hscale=0.98)
 		}else{
-			image <-tkrplot(Frame4, function() plot(imagematrix(img2)),vscale=1.04,hscale=0.98)
+			image <-tkrplot(Frame4, function() plot(imagematrix(img2_local)),vscale=1.04,hscale=0.98)
 		}
 		tkpack(image)
 	}
@@ -1539,7 +1664,6 @@ RIPAgui <- function(){
 	
 	# Function to quit the interface
 	quit <- function(){
-		#rm(img,img2)
 		tkdestroy(tt)
 	}
 	#
@@ -1547,23 +1671,28 @@ RIPAgui <- function(){
 	# Function to show the actual pixel value of the mouse
 	pixelsValues <- function(){
 		plotFunction1 <- function(){
+
+			visualBands1_local <- get('visualBands1',envir=ripaEnv)
+			visualBands2_local <- get('visualBands2',envir=ripaEnv)
+
 			params <- par(bg="white")
 			
-			aux <- tclvalue(tcl(tn,"select"))
-			
-			if (aux==".1.1.1" && numbands1>3){
-				auximg <- array(c(img1[,,visualBands1[1]],img1[,,visualBands1[2]],img1[,,visualBands1[3]]),c(nrow(img1),ncol(img1),numbands1))
+			tab <- checkTab()
+			img1_local <- get('img1',envir=ripaEnv)
+			img3_local <- get('img3',envir=ripaEnv)
+			if (tab=="1" && get('numbands1',envir=ripaEnv)>3){
+				auximg <- array(c(img1_local[,,visualBands1_local[1]],img1_local[,,visualBands1_local[2]],img1_local[,,visualBands1_local[3]]),c(nrow(img1_local),ncol(img1_local),get('numbands1',envir=ripaEnv)))
 				plot(imagematrix(auximg))
 			}
 			
-			if (aux==".1.1.2" && numbands2>3){
-				auximg <- array(c(img3[,,visualBands2[1]],img3[,,visualBands2[2]],img3[,,visualBands2[3]]),c(nrow(img3),ncol(img3),numbands2))
+			if (tab=="2" && get('numbands2',envir=ripaEnv)>3){
+				auximg <- array(c(img3_local[,,visualBands2_local[1]],img3_local[,,visualBands2_local[2]],img3_local[,,visualBands2_local[3]]),c(nrow(img3_local),ncol(img3_local),get('numbands2',envir=ripaEnv)))
 				plot(imagematrix(auximg))
 			}
-			if (aux==".1.1.1" && numbands1<=3)
-				plot(imagematrix(img1))
-			if (aux==".1.1.2" && numbands2<=3)
-				plot(imagematrix(img3))
+			if (tab=="1" && get('numbands1',envir=ripaEnv)<=3)
+				plot(imagematrix(img1_local))
+			if (tab=="2" && get('numbands2',envir=ripaEnv)<=3)
+				plot(imagematrix(img3_local))
 			
 			parPlotSize1 <<- par("plt")
 			usrCoords1   <<- par("usr")
@@ -1571,10 +1700,16 @@ RIPAgui <- function(){
 		}
 		
 		OnLeftClick <- function(x,y){
+			img1_local <- get('img1',envir=ripaEnv)
+			img3_local <- get('img3',envir=ripaEnv)
+			AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
+			AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+			imgtmp_local <- get('imgtmp',envir=ripaEnv)
+
 			xClick <- x
 			yClick <- y
-			width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp)))
-			height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp)))
+			width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp_local)))
+			height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp_local)))
 			
 			xMin <- parPlotSize1[1] * width
 			xMax <- parPlotSize1[2] * width
@@ -1584,8 +1719,8 @@ RIPAgui <- function(){
 			rangeX <- usrCoords1[2] - usrCoords1[1]
 			rangeY <- usrCoords1[4] - usrCoords1[3]
 			
-			imgXcoords <- (xCoords1-usrCoords1[1])*(xMax-xMin)/rangeX + xMin
-			imgYcoords <- (yCoords1-usrCoords1[3])*(yMax-yMin)/rangeY + yMin
+			imgXcoords <- (get('xCoords1',envir=ripaEnv)-usrCoords1[1])*(xMax-xMin)/rangeX + xMin
+			imgYcoords <- (get('yCoords1',envir=ripaEnv)-usrCoords1[3])*(yMax-yMin)/rangeY + yMin
 			
 			xClick <- as.numeric(xClick)+0.5
 			yClick <- as.numeric(yClick)+0.5
@@ -1593,39 +1728,40 @@ RIPAgui <- function(){
 			
 			xPlotCoord <- usrCoords1[1]+(xClick-xMin)*rangeX/(xMax-xMin)
 			yPlotCoord <- usrCoords1[3]+(yClick-yMin)*rangeY/(yMax-yMin)
-			
+			img1_local <- get('img1',envir=ripaEnv)
 			a <- round(xPlotCoord)
-			b <- round(nrow(img1) - yPlotCoord)
+			b <- round(nrow(img1_local) - yPlotCoord)
 			
-			aux <- tclvalue(tcl(tn,"select"))
+			tab <- checkTab()
 			
-			if (aux==".1.1.1"){
-				if (a<0 || b<0 || a>ncol(img1) || b>nrow(img1)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
+			if (tab=="1"){
+				if (a<0 || b<0 || a>ncol(img1_local) || b>nrow(img1_local)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
 				else{
 					aux2 <- NULL
-					for (i in 1:numbands1){
-						if (is.null(AVIRISbands1)) aux2 <- paste(aux2,"Band ",i,": ",img1[b,a,i],"\n",sep="")
-						else aux2 <- paste(aux2,"Band ",AVIRISbands1[i],": ",img1[b,a,i],"\n",sep="")
+					for (i in 1:get('numbands1',envir=ripaEnv)){
+						if (is.null(AVIRISbands1_local)) aux2 <- paste(aux2,"Band ",i,": ",img1_local[b,a,i],"\n",sep="")
+						else aux2 <- paste(aux2,"Band ",AVIRISbands1_local[i],": ",img1_local[b,a,i],"\n",sep="")
 					}
 					tkmessageBox(title="Value",message=aux2,icon="info",type="ok")
 				}
 			}
-			if (aux==".1.1.2"){
-				if (a<0 || b<0 || a>ncol(img3) || b>nrow(img3)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
+			if (tab=="2"){
+				if (a<0 || b<0 || a>ncol(img3_local) || b>nrow(img3_local)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
 				else{
 					aux2 <- NULL
-					for (i in 1:numbands2){
-						if (is.null(AVIRISbands2)) aux2 <- paste(aux2,"Band",i,": ",img3[b,a,i],"\n",sep="")
-						else aux2 <- paste(aux2,"Band",AVIRISbands2[i],": ",img3[b,a,i],"\n",sep="")
+					for (i in 1:get('numbands2',envir=ripaEnv)){
+						if (is.null(AVIRISbands2_local)) aux2 <- paste(aux2,"Band",i,": ",img3_local[b,a,i],"\n",sep="")
+						else aux2 <- paste(aux2,"Band",AVIRISbands2_local[i],": ",img3_local[b,a,i],"\n",sep="")
 					}
 					tkmessageBox(title="Value",message=aux2,icon="info",type="ok")
 				}
 			}
 		}
 		
-		aux <- tclvalue(tcl(tn,"select"))
-		
-		if ((aux==".1.1.1" && is.null(img1)) || (aux==".1.1.2" && is.null(img3))){
+		tab <- checkTab()
+		img1_local <- get('img1',envir=ripaEnv)
+		img3_local <- get('img3',envir=ripaEnv)
+		if ((tab=="1" && is.null(img1_local)) || (tab=="2" && is.null(img3_local))){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -1634,36 +1770,38 @@ RIPAgui <- function(){
 		tkwm.geometry(ttpixels,"+150+0")
 		tkwm.title(ttpixels,"Click on a point to get the pixel value")
 		
-		if (aux==".1.1.1"){
-			xCoords1<<-(1:ncol(img1))
-			yCoords1<<-(1:nrow(img1))
+		if (tab=="1"){
+			assign('xCoords1',(1:ncol(img1_local)),envir=ripaEnv)
+			assign('yCoords1',(1:nrow(img1_local)),envir=ripaEnv)
 		}
-		if (aux==".1.1.2"){
-			xCoords1<<-(1:ncol(img3))
-			yCoords1<<-(1:nrow(img3))
+		if (tab=="2"){
+			assign('xCoords1',(1:ncol(img3_local)),envir=ripaEnv)
+			assign('yCoords1',(1:nrow(img3_local)),envir=ripaEnv)
 		}
 		
 		parPlotSize1 <- c()
 		usrCoords1 <- c()
 	
-		imgtmp <<- tkrplot(ttpixels,fun=plotFunction1,hscale=1.5,vscale=1.5)
-		tkgrid(imgtmp)
+		assign('imgtmp',tkrplot(ttpixels,fun=plotFunction1,hscale=1.5,vscale=1.5),envir=ripaEnv)
+		imgtmp_local <- get('imgtmp',envir=ripaEnv)
+		tkgrid(imgtmp_local)
 	
-		tkbind(imgtmp, "<Button-1>",OnLeftClick)
-		tkconfigure(imgtmp,cursor="hand2")
+		tkbind(imgtmp_local, "<Button-1>",OnLeftClick)
+		tkconfigure(imgtmp_local,cursor="hand2")
+		assign('imgtmp',imgtmp_local,envir=ripaEnv)
 	}
 	#
 	
 	# Function to edit pixels values
 	editPixels <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
+		AVIRISbands1_local <- get('AVIRISbands1',envir=ripaEnv)
 	
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this function only with the first tab!",icon="error",type="ok")
 			return()
 		}
-		
-		if (is.null(img1)){
+		if (is.null(get('img1',envir=ripaEnv))){
 			tkmessageBox(title="Error",message="Please, select an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -1681,22 +1819,26 @@ RIPAgui <- function(){
 		
 		bands<-NULL
 		
-		for (i in 1:numbands1){
-			if (is.null(AVIRISbands1)) bands <- c(bands,paste("Band ",i,sep=""))
-			else bands <- c(bands,paste("Band ",AVIRISbands1[i],sep=""))
+		for (i in 1:get('numbands1',envir=ripaEnv)){
+			if (is.null(AVIRISbands1_local)) bands <- c(bands,paste("Band ",i,sep=""))
+			else bands <- c(bands,paste("Band ",AVIRISbands1_local[i],sep=""))
 		}
 		
-		for (i in (1:numbands1)){
+		for (i in (1:get('numbands1',envir=ripaEnv))){
 			tkinsert(tl,"end",bands[i])
 		}
 		tkselection.set(tl,0)
 		
-		OnOK <- function(){
+		OnOK <- function(tt){
 			
 			onok <- function(){
-				for (i in 1:nrow(img1)){
-					for (j in 1:ncol(img1)){
-						img2[i,j,bandChoice] <- as.numeric(tclvalue(myarray[[i,j]]))
+
+				visualBands1_local <- get('visualBands1',envir=ripaEnv)
+				img1_local <- get('img1',envir=ripaEnv)
+				img2_local <- get('img2',envir=ripaEnv)
+				for (i in 1:nrow(img1_local)){
+					for (j in 1:ncol(img1_local)){
+						img2_local[i,j,bandChoice] <- as.numeric(tclvalue(myarray[[i,j]]))
 					}
 				}
 				
@@ -1707,25 +1849,25 @@ RIPAgui <- function(){
 				Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 				tkplace(Frame4,x=1,y=1)
 				
-				if (numbands1>3){
-					auximg <- array(c(img2[,,visualBands1[1]],img2[,,visualBands1[2]],img2[,,visualBands1[3]]),c(nrow(img2),ncol(img2),numbands1))
+				if (get('numbands1',envir=ripaEnv)>3){
+					auximg <- array(c(img2_local[,,visualBands1_local[1]],img2_local[,,visualBands1_local[2]],img2_local[,,visualBands1_local[3]]),c(nrow(img2_local),ncol(img2_local),get('numbands1',envir=ripaEnv)))
 					image <-tkrplot(Frame4, function() plot(imagematrix(auximg)),vscale=1.04,hscale=0.98)
 				}else{
-					image <-tkrplot(Frame4, function() plot(imagematrix(img2)),vscale=1.04,hscale=0.98)
+					image <-tkrplot(Frame4, function() plot(imagematrix(img2_local)),vscale=1.04,hscale=0.98)
 				}
 				tkpack(image)
 			}
 			
 			bandChoice <- as.numeric(tkcurselection(tl))+1
-			tkdestroy(ttbands)
+			tkdestroy(tt)
 			
 			myarray <- tclArray()
-			
-			for (i in 1:ncol(img1)) myarray[[0,i]] <- i
-			for (i in 1:nrow(img1)) myarray[[i,0]] <- i
-			for (i in 1:nrow(img1)){
-				for (j in 1:ncol(img1)){
-					myarray[[i,j]] <- img1[i,j,bandChoice]
+			img1_local <- get('img1',envir=ripaEnv)
+			for (i in 1:ncol(img1_local)) myarray[[0,i]] <- i
+			for (i in 1:nrow(img1_local)) myarray[[i,0]] <- i
+			for (i in 1:nrow(img1_local)){
+				for (j in 1:ncol(img1_local)){
+					myarray[[i,j]] <- img1_local[i,j,bandChoice]
 				}
 			}
 			
@@ -1733,7 +1875,7 @@ RIPAgui <- function(){
 			tkwm.title(tttable,paste("Pixels Values (Band ",bandChoice,")",sep=""))
 			tkwm.geometry(tttable,"+80+50")
 			tkwm.resizable(tttable,0,0)
-			table <- tkwidget(tttable,"table",rows=nrow(img1)+1,cols=ncol(img1)+1,titlerows=1,titlecols=1,colwidth=20,
+			table <- tkwidget(tttable,"table",rows=nrow(img1_local)+1,cols=ncol(img1_local)+1,titlerows=1,titlecols=1,colwidth=20,
 				height=0,width=0,
 				xscrollcommand=function(...) tkset(xscr,...),yscrollcommand=function(...) tkset(yscr,...))
 			xscr <-tkscrollbar(tttable,orient="horizontal", command=function(...)tkxview(table,...))
@@ -1746,151 +1888,40 @@ RIPAgui <- function(){
 			button <-tkbutton(tttable,text="   OK   ",command=onok)
 			tkgrid(button)
 			
-			#tkconfigure(table, state="disabled")
 		}
 		
-		OK.but <-tkbutton(ttbands,text="   OK   ",command=OnOK)
+		OK.but <-tkbutton(ttbands,text="   OK   ",command=function()OnOK(ttbands))
 		tkgrid(OK.but)
 		tkfocus(ttbands)
-# 		plotFunction1 <- function(){
-# 			params <- par(bg="white")
-# 			
-# 			aux <- .Tcl(paste(tn, "view"))
-# 			aux <- as.integer(aux)
-# 			
-# 			if (aux==0 && numbands1>3){
-# 				auximg <- array(c(img1[,,visualBands1[1]],img1[,,visualBands1[2]],img1[,,visualBands1[3]]),c(nrow(img1),ncol(img1),numbands1))
-# 				plot(imagematrix(auximg))
-# 			}
-# 			
-# 			if (aux==1 && numbands2>3){
-# 				auximg <- array(c(img3[,,visualBands2[1]],img3[,,visualBands2[2]],img3[,,visualBands2[3]]),c(nrow(img3),ncol(img3),numbands2))
-# 				plot(imagematrix(auximg))
-# 			}
-# 			if (aux==0 && numbands1<=3)
-# 				plot(imagematrix(img1))
-# 			if (aux==1 && numbands2<=3)
-# 				plot(imagematrix(img3))
-# 			
-# 			parPlotSize1 <<- par("plt")
-# 			usrCoords1   <<- par("usr")
-# 			par(params)
-# 		}
-# 		
-# 		OnLeftClick <- function(x,y){
-# 			xClick <- x
-# 			yClick <- y
-# 			width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp)))
-# 			height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp)))
-# 			
-# 			xMin <- parPlotSize1[1] * width
-# 			xMax <- parPlotSize1[2] * width
-# 			yMin <- parPlotSize1[3] * height
-# 			yMax <- parPlotSize1[4] * height
-# 			
-# 			rangeX <- usrCoords1[2] - usrCoords1[1]
-# 			rangeY <- usrCoords1[4] - usrCoords1[3]
-# 			
-# 			imgXcoords <- (xCoords1-usrCoords1[1])*(xMax-xMin)/rangeX + xMin
-# 			imgYcoords <- (yCoords1-usrCoords1[3])*(yMax-yMin)/rangeY + yMin
-# 			
-# 			xClick <- as.numeric(xClick)+0.5
-# 			yClick <- as.numeric(yClick)+0.5
-# 			yClick <- height - yClick
-# 			
-# 			xPlotCoord <- usrCoords1[1]+(xClick-xMin)*rangeX/(xMax-xMin)
-# 			yPlotCoord <- usrCoords1[3]+(yClick-yMin)*rangeY/(yMax-yMin)
-# 			
-# 			a <- round(xPlotCoord)
-# 			b <- round(nrow(img1) - yPlotCoord)
-# 			
-# 			aux <- .Tcl(paste(tn, "view"))
-# 			aux <- as.integer(aux)
-# 			
-# 			if (aux==0){
-# 				if (a<0 || b<0 || a>ncol(img1) || b>nrow(img1)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
-# 				else{
-# 					for (i in 1:numbands1){
-# 						returnVal <- modalDialog(paste("Pixel value (Band ",i,")",sep=""),"Enter the new value",img1[b,a,i])
-# 						if (returnVal=="ID_CANCEL")
-# 							return()
-# 						val <- as.double(returnVal)
-# 						img1[b,a,i] <<- val
-# 					}
-# 				}
-# 			}
-# 			if (aux==1){
-# 				if (a<0 || b<0 || a>ncol(img3) || b>nrow(img3)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
-# 				else{
-# 					for (i in 1:numbands2){
-# 						returnVal <- modalDialog(paste("Pixel value (Band ",i,")",sep=""),"Enter the new value",img3[b,a,i])
-# 						if (returnVal=="ID_CANCEL")
-# 							return()
-# 						val <- as.double(returnVal)
-# 						img3[b,a,i] <<- val
-# 					}
-# 				}
-# 			}
-# 			tkdestroy(imgtmp)
-# 			imgtmp <<- tkrplot(ttpixels,fun=plotFunction1,hscale=1.5,vscale=1.5)
-# 			tkgrid(imgtmp)
-# 	
-# 			tkbind(imgtmp, "<Button-1>",OnLeftClick)
-# 			tkconfigure(imgtmp,cursor="hand2")
-# 		}
-# 		
-# 		aux <- .Tcl(paste(tn, "view"))
-# 		aux <- as.integer(aux)
-# 		
-# 		if ((aux==0 && is.null(img1)) || (aux==1 && is.null(img3))){
-# 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
-# 			return()
-# 		}
-# 		
-# 		ttpixels <- tktoplevel()
-# 		tkwm.geometry(ttpixels,"+150+0")
-# 		tkwm.title(ttpixels,"Click on a point to edit the pixel value")
-# 		
-# 		if (aux==0){
-# 			xCoords1<<-(1:ncol(img1))
-# 			yCoords1<<-(1:nrow(img1))
-# 		}
-# 		if (aux==1){
-# 			xCoords1<<-(1:ncol(img3))
-# 			yCoords1<<-(1:nrow(img3))
-# 		}
-# 		
-# 		parPlotSize1 <- c()
-# 		usrCoords1 <- c()
-# 	
-# 		imgtmp <<- tkrplot(ttpixels,fun=plotFunction1,hscale=1.5,vscale=1.5)
-# 		tkgrid(imgtmp)
-# 	
-# 		tkbind(imgtmp, "<Button-1>",OnLeftClick)
-# 		tkconfigure(imgtmp,cursor="hand2")
+
 	}
 	#
 	
-	# Function to buils dynamic graphics from GGOBI
+	# Function to build dynamic graphics from GGOBI
 	dynFunc <- function(func){
-		aux <- tclvalue(tcl(tn,"select"))
 
-		if (aux==".1.1.1"){
+
+		tab <- checkTab()
+
+		AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
+		regionsList_local <- get('regionsList',envir=ripaEnv)
+
+		if (tab=="1"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the second tab!",icon="error",type="ok")
 			return()
 		}
 		
-		if (is.null(img3)){
+		if (is.null(get('img3',envir=ripaEnv))){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
 		
-		if (numbands2==1){
+		if (get('numbands2',envir=ripaEnv)==1){
 			tkmessageBox(title="Error",message="Graphics available only for images with more than one band!",icon="error",type="ok")
 			return()
 		}
 		
-		if (length(regionsList)==0){
+		if (length(get('regionsList',envir=ripaEnv))==0){
 			tkmessageBox(title="Error",message="There are not regions!",icon="error",type="ok")
 			return()
 		}
@@ -1898,50 +1929,52 @@ RIPAgui <- function(){
 		names <- vector()
 		vars <- vector()
 		dataf <- vector()
+
+
 		if (func!=9){
-			for (i in 1:numbands2){
+			for (i in 1:get('numbands2',envir=ripaEnv)){
 				auxVector <- vector()
-				for (j in 1:length(regionsList)){
-					if (func==1) auxVector<-c(auxVector,min(regionsList[[j]][[2]][[i]]))
-					if (func==2) auxVector<-c(auxVector,max(regionsList[[j]][[2]][[i]]))
-					if (func==3) auxVector<-c(auxVector,mean(regionsList[[j]][[2]][[i]]))
-					if (func==4) auxVector<-c(auxVector,median(regionsList[[j]][[2]][[i]]))
-					if (func==5) auxVector<-c(auxVector,sd(regionsList[[j]][[2]][[i]]))
-					if (func==6) auxVector<-c(auxVector,mad(regionsList[[j]][[2]][[i]]))
-					if (func==7) auxVector<-c(auxVector,kurtosis(regionsList[[j]][[2]][[i]]))
-					if (func==8) auxVector<-c(auxVector,skewness(regionsList[[j]][[2]][[i]]))
+				for (j in 1:length(regionsList_local)){
+					if (func==1) auxVector<-c(auxVector,min(regionsList_local[[j]][[2]][[i]]))
+					if (func==2) auxVector<-c(auxVector,max(regionsList_local[[j]][[2]][[i]]))
+					if (func==3) auxVector<-c(auxVector,mean(regionsList_local[[j]][[2]][[i]]))
+					if (func==4) auxVector<-c(auxVector,median(regionsList_local[[j]][[2]][[i]]))
+					if (func==5) auxVector<-c(auxVector,sd(regionsList_local[[j]][[2]][[i]]))
+					if (func==6) auxVector<-c(auxVector,mad(regionsList_local[[j]][[2]][[i]]))
+					if (func==7) auxVector<-c(auxVector,kurtosis(regionsList_local[[j]][[2]][[i]]))
+					if (func==8) auxVector<-c(auxVector,skewness(regionsList_local[[j]][[2]][[i]]))
 				}
-				if (is.null(AVIRISbands2)){
+				if (is.null(AVIRISbands2_local)){
 					assign(paste("Band",i,sep=""),auxVector)
 					names <- c(names,paste("Band",i,sep=""))
 				} else{
-					assign(paste("Band",AVIRISbands2[i],sep=""),auxVector)
-					names <- c(names,paste("Band",AVIRISbands2[i],sep=""))
+					assign(paste("Band",AVIRISbands2_local[i],sep=""),auxVector)
+					names <- c(names,paste("Band",AVIRISbands2_local[i],sep=""))
 				}
 				vars <- c(vars,i)
 			}
 		}else{
-			for (i in 1:numbands2){
-				auxVector<-regionsList[[1]][[2]][[i]]
-				if (is.null(AVIRISbands2)){
+			for (i in 1:get('numbands2',envir=ripaEnv)){
+				auxVector<-regionsList_local[[1]][[2]][[i]]
+				if (is.null(AVIRISbands2_local)){
 					assign(paste("Band",i,sep=""),auxVector)
 					names <- c(names,paste("Band",i,sep=""))
 				} else{
-					assign(paste("Band",AVIRISbands2[i],sep=""),auxVector)
-					names <- c(names,paste("Band",AVIRISbands2[i],sep=""))
+					assign(paste("Band",AVIRISbands2_local[i],sep=""),auxVector)
+					names <- c(names,paste("Band",AVIRISbands2_local[i],sep=""))
 				}
 				vars <- c(vars,i)
 			}
 		}
 		print(auxVector)
-		for (i in 1:numbands2){
+		for (i in 1:get('numbands2',envir=ripaEnv)){
 			if (i==1){
-				if (is.null(AVIRISbands2)) dataf <- data.frame(get(paste("Band",i,sep="")))
-				else dataf <- data.frame(get(paste("Band",AVIRISbands2[i],sep="")))
+				if (is.null(AVIRISbands2_local)) dataf <- data.frame(get(paste("Band",i,sep="")))
+				else dataf <- data.frame(get(paste("Band",AVIRISbands2_local[i],sep="")))
 			}
 			else{
-				if (is.null(AVIRISbands2)) dataf[,i] <- get(paste("Band",i,sep=""))
-				else dataf[,i] <- get(paste("Band",AVIRISbands2[i],sep=""))
+				if (is.null(AVIRISbands2_local)) dataf[,i] <- get(paste("Band",i,sep=""))
+				else dataf[,i] <- get(paste("Band",AVIRISbands2_local[i],sep=""))
 			}
 		}
 		
@@ -1953,28 +1986,31 @@ RIPAgui <- function(){
 	
 	# Function to show all regions
 	showAllRegions <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 
-		if (aux==".1.1.1"){
+		visualBands2_local <- get('visualBands2',envir=ripaEnv)
+		regionsList_local <- get('regionsList',envir=ripaEnv)
+
+		if (tab=="1"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the second tab!",icon="error",type="ok")
 			return()
 		}
 	
-		if (length(regionsList)==0){
+		if (length(regionsList_local)==0){
 			tkmessageBox(title="Error",message="There are not regions",icon="error",type="ok")
 			return()
 		}
-		for (i in 1:length(regionsList)){
+		for (i in 1:length(regionsList_local)){
 			ttregion <- tktoplevel()
 			tkwm.resizable(ttregion,0,0)
 			tktitle(ttregion)<-paste("Region",i)
 			
-			if (numbands2>3){
-				auximg <- array(c(regionsList[[i]][[3]][,,visualBands2[1]],regionsList[[i]][[3]][,,visualBands2[2]],regionsList[[i]][[3]][,,visualBands2[3]]),c(nrow(regionsList[[i]][[3]]),ncol(regionsList[[i]][[3]]),numbands2))
+			if (get('numbands2',envir=ripaEnv)>3){
+				auximg <- array(c(regionsList_local[[i]][[3]][,,visualBands2_local[1]],regionsList_local[[i]][[3]][,,visualBands2_local[2]],regionsList_local[[i]][[3]][,,visualBands2_local[3]]),c(nrow(regionsList_local[[i]][[3]]),ncol(regionsList_local[[i]][[3]]),get('numbands2',envir=ripaEnv)))
 				cRegion <-tkrplot(ttregion, function() plot(imagematrix(auximg)),vscale=0.8,hscale=0.8)
 			}
-			if (numbands2<=3){
-				cRegion <-tkrplot(ttregion, function() plot(imagematrix(regionsList[[i]][[3]])),vscale=0.8,hscale=0.8)
+			if (get('numbands2',envir=ripaEnv)<=3){
+				cRegion <-tkrplot(ttregion, function() plot(imagematrix(regionsList_local[[i]][[3]])),vscale=0.8,hscale=0.8)
 			}
 			tkpack(cRegion)
 		}
@@ -1982,120 +2018,146 @@ RIPAgui <- function(){
 	#
 	
 	pca <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
-		
-		if ((aux==".1.1.1" && is.null(img1)) || (aux==".1.1.2" && is.null(img3))){
+		tab <- checkTab()
+		img1_local <- get('img1',envir=ripaEnv)
+		if ((tab=="1" && is.null(img1_local)) || (tab=="2" && is.null(get('img3',envir=ripaEnv)))){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
-		data <- matrix(nrow=nrow(img1[,,1])*ncol(img1[,,1]),ncol=numbands1)
-		if (aux==".1.1.1"){
-			for (i in 1:numbands1){
-				data[,i] <- as.vector(t(img1[,,i]))
+		data <- matrix(nrow=nrow(img1_local[,,1])*ncol(img1_local[,,1]),ncol=get('numbands1',envir=ripaEnv))
+		if (tab=="1"){
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				data[,i] <- as.vector(t(img1_local[,,i]))
 			}
 		}
 		result <- princomp(data)
-		for (i in 1:numbands1){
-			assign(paste("pca",i,sep=""),matrix(result[[6]][,i],nrow=nrow(img1[,,1]),ncol=ncol(img1[,,1]),byrow=T),env = .GlobalEnv)
+		for (i in 1:get('numbands1',envir=ripaEnv)){
+			assign(paste("pca",i,sep=""),matrix(result[[6]][,i],nrow=nrow(img1_local[,,1]),ncol=ncol(img1_local[,,1]),byrow=T))
 		}
-		for (i in 1:numbands1){
+		for (i in 1:get('numbands1',envir=ripaEnv)){
 			assign(paste("ttpca",i,sep=""),tktoplevel())
 			tkwm.title(get(paste("ttpca",i,sep="")),paste("PCA ",i,sep=""))
 			image <-tkrplot(get(paste("ttpca",i,sep="")), function() plot(imagematrix(stretchImg(get(paste("pca",i,sep=""))))),vscale=0.7,hscale=0.7)
 			tkpack(image)
 		}
-		#plot(imagematrix(pca1))
 	}
 
 	# Function to apply a zoom to an image
 	zoomImg <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
+		img1_local <- get('img1',envir=ripaEnv)
+		img3_local <- get('img3',envir=ripaEnv)
+		AVIRISbands1_local <- get('AVIRISbands1',envir = ripaEnv)
+		AVIRISbands2_local <- get('AVIRISbands2',envir = ripaEnv)
+		imageType1_local <- get('imageType1',envir = ripaEnv)		
+		imageType2_local <- get('imageType2',envir = ripaEnv)
+
+		bands_local <- get('bands',envir=ripaEnv)
 		
-		if ((aux==".1.1.1" && is.null(img1)) || (aux==".1.1.2" && is.null(img3))){
+		if ((tab=="1" && is.null(img1_local)) || (tab=="2" && is.null(img3_local))){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
 
-		if (aux==".1.1.1"){
-			if (imageType1=="lan"){
-				auximg <- array(c(img1[,,visualBands1[1]],img1[,,visualBands1[2]],img1[,,visualBands1[3]]),c(nrow(img1),ncol(img1),numbands1))
+		if (tab=="1"){
+			visualBands1_local <- get('visualBands1',envir=ripaEnv)
+			if (imageType1_local=="lan"){
+				auximg <- array(c(img1_local[,,visualBands1_local[1]],img1_local[,,visualBands1_local[2]],img1_local[,,visualBands1_local[3]]),c(nrow(img1_local),ncol(img1_local),get('numbands1',envir=ripaEnv)))
 				plot(imagematrix(auximg))
-				zoom_jpgRGB(auximg)
+				zoom_jpg_png_RGB(auximg)
 			}
 
-			if (imageType1=="jpgRGB"){
-				plot(imagematrix(img1))
-				zoom_jpgRGB(img1)
+			if (imageType1_local=="jpgRGB" || imageType1_local=="pngRGB"){
+				plot(imagematrix(img1_local))
+				zoom_jpg_png_RGB(img1_local)
 			}
 			
-			if (imageType1=="jpgGrey"){
-				plot(imagematrix(img1))
-				zoom_jpgGrey(img1)
+			if (imageType1_local=="jpgGrey" || imageType1_local=="pngGrey"){
+				plot(imagematrix(img1_local))
+				zoom_jpg_png_Grey(img1_local)
 			}
 				
-			if (!is.null(AVIRISbands1)){
-				plot(bands[[1]],bands[[2]],bands[[3]])
-				zoom(bands[[1]],bands[[2]],bands[[3]])
+			if (!is.null(AVIRISbands1_local)){
+				plot(bands_local[[1]],bands_local[[2]],bands_local[[3]])
+				zoom(bands_local[[1]],bands_local[[2]],bands_local[[3]])
 			}
 		}
 
-		if (aux==".1.1.2"){
-			if (imageType2=="lan"){
-				auximg <- array(c(img3[,,visualBands2[1]],img3[,,visualBands2[2]],img3[,,visualBands2[3]]),c(nrow(img3),ncol(img3),numbands2))
+		if (tab=="2"){
+			visualBands2_local <- get('visualBands2',envir=ripaEnv)
+			if (imageType2_local=="lan"){
+				auximg <- array(c(img3_local[,,visualBands2_local[1]],img3_local[,,visualBands2_local[2]],img3_local[,,visualBands2_local[3]]),c(nrow(img3_local),ncol(img3_local),get('numbands2',envir=ripaEnv)))
 				plot(imagematrix(auximg))
-				zoom_jpgRGB(auximg)
+				zoom_jpg_png_RGB(auximg)
 			}
 
-			if (imageType2=="jpgRGB"){
-				plot(imagematrix(img3))
-				zoom_jpgRGB(img3)
+			if (imageType2_local=="jpgRGB" || imageType2_local=="pngRGB"){
+				plot(imagematrix(img3_local))
+				zoom_jpg_png_RGB(img3_local)
 			}
 			
-			if (imageType2=="jpgGrey"){
-				plot(imagematrix(img3))
-				zoom_jpgGrey(img3)
+			if (imageType2_local=="jpgGrey" || imageType2_local=="pngGrey"){
+				plot(imagematrix(img3_local))
+				zoom_jpg_png_Grey(img3_local)
 			}
 				
-			if (!is.null(AVIRISbands2)){
-				plot(bands[[1]],bands[[2]],bands[[3]])
-				zoom(bands[[1]],bands[[2]],bands[[3]])
+			if (!is.null(AVIRISbands2_local)){
+				plot(bands_local[[1]],bands_local[[2]],bands_local[[3]])
+				zoom(bands_local[[1]],bands_local[[2]],bands_local[[3]])
 			}
 		}
 
 	}
 
-	zoom_jpgRGB <- function(image){
+	zoom_jpg_png_RGB <- function(image){
 		pos <- locator(2)
+		width <- dim(image)[1]
+		if(pos$x[1]>pos$x[2]){
+			aux <- pos$x[1]
+			pos$x[1] <- pos$x[2]
+			pos$x[2] <- aux  
+		}
+		if(pos$y[1]>pos$y[2]){
+			auy <- pos$y[1]
+			pos$y[1] <- pos$y[2]
+			pos$y[2] <- auy  
+		}
+		
 		pos$x <- round(pos$x)
 		pos$y <- round(pos$y)
-		pos$y[1] = dim(image)[1] - pos$y[1]
-		pos$y[2] = dim(image)[1] - pos$y[2]
-
-		#rect(pos$x[1],pos$y[1],pos$x[2],pos$y[2],col="red",density=0.1)
-		plot(imagematrix(image[pos$y[1]:pos$y[2],pos$x[1]:pos$x[2],]))
+		rect(pos$x[1],pos$y[1],pos$x[2],pos$y[2],col="red",density=0.1)
+		plot(imagematrix(image[(width-pos$y[2]):(width-pos$y[1]),pos$x[1]:pos$x[2],]))
 	}
 
-	zoom_jpgGrey <- function(image){
+	zoom_jpg_png_Grey <- function(image){
 		pos <- locator(2)
+		width <- dim(image)[1]
+		if(pos$x[1]>pos$x[2]){
+			aux <- pos$x[1]
+			pos$x[1] <- pos$x[2]
+			pos$x[2] <- aux  
+		}
+		if(pos$y[1]>pos$y[2]){
+			auy <- pos$y[1]
+			pos$y[1] <- pos$y[2]
+			pos$y[2] <- auy  
+		}
 		pos$x <- round(pos$x)
 		pos$y <- round(pos$y)
-		pos$y[1] = dim(image)[1] - pos$y[1]
-		pos$y[2] = dim(image)[1] - pos$y[2]
-
-		#rect(pos$x[1],pos$y[1],pos$x[2],pos$y[2],col="red",density=0.1)
-		plot(imagematrix(image[pos$y[1]:pos$y[2],pos$x[1]:pos$x[2],]))
+		rect(pos$x[1],pos$y[1],pos$x[2],pos$y[2],col="red",density=0.1)
+		plot(imagematrix(image[(width-pos$y[2]):(width-pos$y[1]),pos$x[1]:pos$x[2],]))
 	}
 
 	# Function to equalize the image histogram
 	equalizeImg <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
-
-		if (aux==".1.1.2"){
+		tab <- checkTab()
+		img1_local <- get('img1',envir=ripaEnv)
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
 	
-		if (is.null(img1)){
+		if (is.null(img1_local)){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -2106,25 +2168,192 @@ RIPAgui <- function(){
 		tkplace(Frame3,x=510,y=30)
 		Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 		tkplace(Frame4,x=1,y=1)
-		img2<<-img1
-		for (i in 1:numbands1){
-			img2[,,i] <<- equalize(img1[,,i])
+		
+		assign('img2',img1_local,envir=ripaEnv)
+		img2_local <- get('img2',envir=ripaEnv)	
+		#img2<<-img1_local
+		for (i in 1:get('numbands1',envir=ripaEnv)){
+			img2_local[,,i] <- equalize(img1_local[,,i])
 		}
-		image <-tkrplot(Frame4, function() plot(imagematrix(img2)),vscale=1.04,hscale=0.98)
+		image <-tkrplot(Frame4, function() plot(imagematrix(img2_local)),vscale=1.04,hscale=0.98)
+		assign('img2',img2_local,envir=ripaEnv)
 		tkpack(image)
 	}
 	#
+
+
+################################ Comes from package rimage ########################################
+##
+## rimage: Image Processing Library for R
+##
+## $Header: /database/repository/rimage/R/rimage.R,v 1.8.2.8 2004/03/17 06:35:18 tomo Exp $
+##
+## Copyright (c) 2003 Nikon Systems Inc.
+## For complete license terms see file LICENSE_rimage
+##################################################################################################
+
 	
+	##
+	## Grey level adjustment
+	##
+
+	thresholding <- function(img, mode="fixed", th=0.5) {
+	  th.by.discrim <- function(img, L=255) {
+	    img.int <- floor(L*img)
+	    h <- hist(img.int, breaks=0:(L+1), plot=FALSE)$density
+	    lv <- 0:L
+	    u.img <- sum(lv * h) / sum(h)
+	    s.img <- sum(h * (lv - u.img)^2)
+	    Fs <- sapply(1:(L-1), function(k) {
+	      w.0 <- sum(h[1:k])
+	      w.1 <- sum(h[(k+1):L])
+	      u.0 <- sum((1:k) * h[1:k]) / w.0
+	      u.1 <- sum(((k+1):L) * h[(k+1):L]) / w.1
+	      s.B <- w.0 * (u.0 - u.img)^2 + w.1 * (u.1 - u.img)^2
+	      s.B / s.img
+	    })
+	    lv[rev(order(Fs, na.last = NA))[1]]/L
+	  }
+
+	  th <- switch(mode, fixed=th, da=th.by.discrim(img))
+	  if (is.null(th)) stop("Either mode or threshold isn't correct.")
+	  img[img < th] <- 0
+	  img[img >= th] <- 1
+	  img
+	}
+
+	## image takes up values 0..1    
+	equalize <- function(img) {
+		img <- (img-min(img))*255 / (max(img)-min(img)) ## normalize it to 0..255
+		h <- dim(img)[1]
+		w <- dim(img)[2]
+		res <- matrix(.C("equalize",
+		        as.double(img),
+		        as.integer(w),
+		        as.integer(h),
+		        spec = double(w*h),
+		        PACKAGE="ripa"
+		        )$spec, nrow=h, ncol=w)
+		imagematrix(res / 255)  ## map it to 0..1
+	}
+	
+	clipping <- function(img, low=0, high=1) {
+  		img[img < low] <- low
+		img[img > high] <- high
+  		img
+	}
+
+	normalize <- function(img) {
+  		(img - min(img))/(max(img) - min(img))
+	}
+
+	rgb2grey <- function(img, coefs=c(0.30, 0.59, 0.11)) {
+  		if (is.null(dim(img))) stop("image matrix isn't correct.")
+  		if (length(dim(img))<3) stop("image matrix isn't rgb image.")
+  		imagematrix(coefs[1] * img[,,1] + coefs[2] * img[,,2] + coefs[3] * img[,,3], type="grey")
+	}
+
+	##
+	## Edge Detection Filters
+	##
+
+	sobel.h <- function(img) {
+	  w <- dim(img)[2]
+	  h <- dim(img)[1]
+	  imagematrix(abs(matrix(.C("sobel_h",
+		                    as.double(img), as.integer(w), as.integer(h),
+		                    eimg = double(w * h),
+		                    PACKAGE="ripa")$eimg,
+		                 nrow=h, ncol=w)), noclipping=TRUE)
+	}
+
+	sobel.v <- function(img) {
+	  w <- dim(img)[2]
+	  h <- dim(img)[1]
+	  imagematrix(abs(matrix(.C("sobel_v",
+		                    as.double(img), as.integer(w), as.integer(h),
+		                    eimg = double(w * h),
+		                    PACKAGE="ripa")$eimg,
+		                 nrow=h, ncol=w)), noclipping=TRUE)
+	}
+
+	sobel <- function(img) {
+	  h.img <- sobel.h(img)
+	  v.img <- sobel.v(img)
+	  (h.img + v.img)/2
+	}
+
+	laplacian <- function(img) {
+	  w <- dim(img)[2]
+	  h <- dim(img)[1]
+	  l.img <- imagematrix(matrix(.C("laplacian",
+		                         as.double(img), as.integer(w), as.integer(h),
+		                         eimg = double(w * h),
+		                         PACKAGE="ripa")$eimg,
+		                      nrow=h, ncol=w),
+		               noclipping=TRUE)
+	}
+
+	##
+	## Rank Filters
+	##
+
+	meanImg <- function(img) {
+	  expand.h <- cbind(img[,1], img, img[,dim(img)[2]])
+	  ex.img <- rbind(expand.h[1,], expand.h, expand.h[dim(img)[1],])
+	  w <- dim(ex.img)[2]
+	  h <- dim(ex.img)[1]
+	  f.img <- matrix(.C("meanfilter",
+		             as.double(ex.img), as.integer(w), as.integer(h),
+		             eimg = double(w * h),
+		             PACKAGE="ripa")$eimg,
+		          nrow=h, ncol=w)
+	  imagematrix(f.img[2:(dim(f.img)[1]-1),2:(dim(f.img)[2]-1)])
+	}
+
+	minImg <- function(img) {
+	  expand.h <- cbind(img[,1], img, img[,dim(img)[2]])
+	  ex.img <- rbind(expand.h[1,], expand.h, expand.h[dim(img)[1],])
+	  w <- dim(ex.img)[2]
+	  h <- dim(ex.img)[1]
+	  f.img <- matrix(.C("minfilter",
+		             as.double(ex.img), as.integer(w), as.integer(h),
+		             eimg = double(w * h),
+		             PACKAGE="ripa")$eimg,
+		          nrow=h, ncol=w)
+	  imagematrix(f.img[2:(dim(f.img)[1]-1),2:(dim(f.img)[2]-1)])
+	}
+
+	maxImg <- function(img) {
+	  expand.h <- cbind(img[,1], img, img[,dim(img)[2]])
+	  ex.img <- rbind(expand.h[1,], expand.h, expand.h[dim(img)[1],])
+	  w <- dim(ex.img)[2]
+	  h <- dim(ex.img)[1]
+	  f.img <- matrix(.C("maxfilter",
+		             as.double(ex.img), as.integer(w), as.integer(h),
+		             eimg = double(w * h),
+		             PACKAGE="ripa")$eimg,
+		          nrow=h, ncol=w)
+	  imagematrix(f.img[2:(dim(f.img)[1]-1),2:(dim(f.img)[2]-1)])
+	}
+	#################################
+
 	# Function to show the chosen region
 	region <- function(){
+
+
 		chooseRegion <- function(){
+
+			img3_local <- get('img3',envir=ripaEnv)
 			plotFunction2 <- function(){
+				img3_local <- get('img3',envir=ripaEnv)
+				visualBands2_local <- get('visualBands2',envir=ripaEnv)
 				params <- par(bg="white")
-				if (numbands2>3){
-					auximg <- array(c(img3[,,visualBands2[1]],img3[,,visualBands2[2]],img3[,,visualBands2[3]]),c(nrow(img3),ncol(img3),numbands2))
+				if (get('numbands2',envir=ripaEnv)>3){
+					auximg <- array(c(img3_local[,,visualBands2_local[1]],img3_local[,,visualBands2_local[2]],img3_local[,,visualBands2_local[3]]),c(nrow(img3_local),ncol(img3_local),get('numbands2',envir=ripaEnv)))
 					plot(imagematrix(auximg))
 				}else{
-					plot(imagematrix(img3))
+					plot(imagematrix(img3_local))
 				}
 				parPlotSize2 <<- par("plt")
 				usrCoords2   <<- par("usr")
@@ -2132,11 +2361,12 @@ RIPAgui <- function(){
 			}
 		
 			OnLeftClick2 <- function(x,y){
-			
+				img3_local <- get('img3',envir=ripaEnv)
+				imgtmp2_local <- get('imgtmp2',envir=ripaEnv)
 				xClick <- x
 				yClick <- y
-				width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp2)))
-				height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp2)))
+				width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp2_local)))
+				height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp2_local)))
 				
 				xMin <- parPlotSize2[1] * width
 				xMax <- parPlotSize2[2] * width
@@ -2146,8 +2376,8 @@ RIPAgui <- function(){
 				rangeX <- usrCoords2[2] - usrCoords2[1]
 				rangeY <- usrCoords2[4] - usrCoords2[3]
 			
-				imgXcoords <- (xCoords2-usrCoords2[1])*(xMax-xMin)/rangeX + xMin
-				imgYcoords <- (yCoords2-usrCoords2[3])*(yMax-yMin)/rangeY + yMin
+				imgXcoords <- (get('xCoords2',envir=ripaEnv)-usrCoords2[1])*(xMax-xMin)/rangeX + xMin
+				imgYcoords <- (get('yCoords2',envir=ripaEnv)-usrCoords2[3])*(yMax-yMin)/rangeY + yMin
 				
 				xClick <- as.numeric(xClick)+0.5
 				yClick <- as.numeric(yClick)+0.5
@@ -2157,27 +2387,34 @@ RIPAgui <- function(){
 				yPlotCoord <- usrCoords2[3]+(yClick-yMin)*rangeY/(yMax-yMin)
 				
 				a <- round(xPlotCoord)
-				b <- round(nrow(img3) - yPlotCoord)
+				b <- round(nrow(img3_local) - yPlotCoord)
 				
-				if (a<0 || b<0 || a>ncol(img3) || b>nrow(img3)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
+				if (a<0 || b<0 || a>ncol(img3_local) || b>nrow(img3_local)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
 				else{
-				regionPointsX <<- c(regionPointsX,a)
-					regionPointsY <<- c(regionPointsY,b)
+					assign('regionPointsX',c(get('regionPointsX',envir=ripaEnv),a),envir=ripaEnv)
+					assign('regionPointsY',c(get('regionPointsY',envir=ripaEnv),b),envir=ripaEnv)
 				}
 			}
 			
 			findRegion <- function(){
+				img3_local <- get('img3',envir=ripaEnv)
+				visualBands2_local <- get('visualBands2',envir=ripaEnv)
 				regionValues <- list()
 				ttregion <- tktoplevel()
 				tkwm.geometry(ttregion,"+0+0")
 				tkwm.resizable(ttregion,0,0)
-				tktitle(ttregion)<-paste("Region",length(regionsList)+1)
-				n = as.integer(length(regionPointsX))
-				out = .C("grahamMain",n,as.integer(regionPointsX),as.integer(regionPointsY),xvectorOut = as.integer(rep(0,n)),yvectorOut = as.integer(rep(0,n)),PACKAGE="ripa")
+				tktitle(ttregion)<-paste("Region",length(get('regionsList',envir=ripaEnv))+1)
+				n = as.integer(length(get('regionPointsX',envir=ripaEnv)))
+				#out = .C("grahamMain",n,as.integer(get('regionPointsX',envir=ripaEnv)),as.integer(get('regionPointsY',envir=ripaEnv)),xvectorOut = as.integer(rep(0,n)),yvectorOut = as.integer(rep(0,n)),PACKAGE="ripa")
 				aux=NULL
 				enter=F
-				x = out$xvectorOut
-				y = out$yvectorOut
+				regionPointsX_local <- get('regionPointsX',envir=ripaEnv)
+				regionPointsY_local <- get('regionPointsY',envir=ripaEnv)
+				indices = chull(regionPointsX_local,regionPointsY_local)
+				x = regionPointsX_local[indices]
+				y = regionPointsY_local[indices]
+				#x = out$xvectorOut
+				#y = out$yvectorOut
 				for (i in 1:length(x)){
 					if (x[i]==0){
 						enter=T
@@ -2203,20 +2440,23 @@ RIPAgui <- function(){
 				}
 				if (enter==T) y = aux
 				
-				chosenRegion <- img3
-				for (i in 1:numbands2){
-					out <- .C("inpolyMain",as.integer(length(x)),as.integer(x),as.integer(y),outregion=as.double(as.vector(t(as.matrix(img3[,,i])))),as.integer(nrow(img3)),as.integer(ncol(img3)),rValues = as.double(rep(0,nrow(img3)*ncol(img3))),regionLength=as.integer(0),PACKAGE="ripa")
-					chosenRegion[,,i] <- matrix(out$outregion,ncol=ncol(img3),byrow=T)
+				chosenRegion <- img3_local
+				for (i in 1:get('numbands2',envir=ripaEnv)){
+					out <- .C("inpolyMain",as.integer(length(x)),as.integer(x),as.integer(y),outregion=as.double(as.vector(t(as.matrix(img3_local[,,i])))),as.integer(nrow(img3_local)),as.integer(ncol(img3_local)),rValues = as.double(rep(0,nrow(img3_local)*ncol(img3_local))),regionLength=as.integer(0),PACKAGE="ripa")
+					chosenRegion[,,i] <- matrix(out$outregion,ncol=ncol(img3_local),byrow=T)
 					regionValues[[i]] <- out$rValues[1:(out$regionLength-1)]
 				}
 				
-				regionsList[[length(regionsList)+1]] <<- list(Type=regionType,Values=regionValues,Visual=chosenRegion)
+				regionsList_local <- get('regionsList',envir=ripaEnv)
+
+				regionsList_local[[length(regionsList_local)+1]] <- list(Type=get('regionType',envir=ripaEnv),Values=regionValues,Visual=chosenRegion)
 					
-				names(regionsList)[[length(regionsList)]] <<-paste("Region",length(regionsList),sep=" ")
-				length(names(regionsList)) <<- length(regionsList)
+				names(regionsList_local)[[length(regionsList_local)]] <-paste("Region",length(regionsList_local),sep=" ")
+				length(names(regionsList_local)) <- length(regionsList_local)
+				assign('regionsList',regionsList_local,envir=ripaEnv)
 				
-				if (numbands2>3){
-					auximg <- array(c(chosenRegion[,,visualBands2[1]],chosenRegion[,,visualBands2[2]],chosenRegion[,,visualBands2[3]]),c(nrow(chosenRegion),ncol(chosenRegion),numbands2))
+				if (get('numbands2',envir=ripaEnv)>3){
+					auximg <- array(c(chosenRegion[,,visualBands2_local[1]],chosenRegion[,,visualBands2_local[2]],chosenRegion[,,visualBands2_local[3]]),c(nrow(chosenRegion),ncol(chosenRegion),get('numbands2',envir=ripaEnv)))
 					cRegion <-tkrplot(ttregion, function() plot(imagematrix(auximg,noclipping=TRUE)),vscale=0.8,hscale=0.8)
 					tkpack(cRegion)
 				}else{
@@ -2225,13 +2465,11 @@ RIPAgui <- function(){
 				}
 				
 				showRegionStatistics(regionValues)
-				if (exists("ttregionsbands1")) tkdestroy(ttregionsbands1)
-				if (exists("ttregionsbands2")) tkdestroy(ttregionsbands2)
-				#regionBand()
 			}
 			
 			# Auxiliar function to print the statistical summary of the regions
 			showRegionStatistics <- function(region){
+				AVIRISbands2_local <- get('AVIRISbands2',envir=ripaEnv)
 				# Function to print the statistical summary of the regions
 				printStatistcs <- function(nR,minR,maxR,meanR,medianR,deviationR,mDeviationR,kurtosisR,skewnessR){
 					tkconfigure(statisticsTxt,state="normal")
@@ -2248,7 +2486,7 @@ RIPAgui <- function(){
 				}
 				#
 				
-				for (i in 1:numbands2){
+				for (i in 1:get('numbands2',envir=ripaEnv)){
 					nR <- length(region[[i]])
 					minR <- min(region[[i]])
 					maxR <- max(region[[i]])
@@ -2259,49 +2497,57 @@ RIPAgui <- function(){
 					kurtosisR <- kurtosis(as.vector(region[[i]]))
 					skewnessR <- skewness(as.vector(region[[i]]))
 					tkconfigure(statisticsTxt,state="normal")
-					if (i==1) tkinsert(statisticsTxt,"end",paste(names(regionsList)[length(regionsList)],"\n"))
-					if (is.null(AVIRISbands2)) tkinsert(statisticsTxt,"end",paste("Band",i,"\n"))
-					else tkinsert(statisticsTxt,"end",paste("Band",AVIRISbands2[i],"\n"))
+					if (i==1) tkinsert(statisticsTxt,"end",paste(names(get('regionsList',envir=ripaEnv))[length(get('regionsList',envir=ripaEnv))],"\n"))
+					if (is.null(AVIRISbands2_local)) tkinsert(statisticsTxt,"end",paste("Band",i,"\n"))
+					else tkinsert(statisticsTxt,"end",paste("Band",AVIRISbands2_local[i],"\n"))
 					printStatistcs(nR,minR,maxR,meanR,medianR,deviationR,mDeviationR,kurtosisR,skewnessR)
 				}
 			}
 			#
 			
 			OnRightClick <- function(){
-				tkdestroy(ttpoints)
+				tkdestroy(get('ttpoints',envir=ripaEnv))
 				findRegion()
 			}
 			
 			rectangleRegion <- function(){
+				regionPointsX_local <- get('regionPointsX',envir=ripaEnv)
+				regionPointsY_local <- get('regionPointsY',envir=ripaEnv)
+				img3_local <- get('img3',envir=ripaEnv)
+				visualBands2_local <- get('visualBands2',envir=ripaEnv)
 				regionValues <- list()
-				tkdestroy(ttpoints)
+				tkdestroy(get('ttpoints',envir=ripaEnv))
 				
 				ttregion <- tktoplevel()
 				tkwm.geometry(ttregion,"+0+0")
 				tkwm.resizable(ttregion,0,0)
-				tktitle(ttregion)<-paste("Region",length(regionsList)+1)
+				tktitle(ttregion)<-paste("Region",length(get('regionsList',envir=ripaEnv))+1)
 				
 				a<-1
-				b<-regionPointsY[1]
-				c<-regionPointsY[2]
-				d<-nrow(img3)
+				b<-regionPointsY_local[1]
+				c<-regionPointsY_local[2]
+				d<-nrow(img3_local)
 				e<-1
-				f<-regionPointsX[1]
-				g<-regionPointsX[2]
-				h<-ncol(img3)
+				f<-regionPointsX_local[1]
+				g<-regionPointsX_local[2]
+				h<-ncol(img3_local)
 				
-				chosenRegion<-img3[-c(a:b,c:d),-c(e:f,g:h),]
-				chosenRegion <- array(chosenRegion,dim=c(nrow(chosenRegion),ncol(chosenRegion),dim(img3)[3]))
-				for (i in 1:numbands2){
+				chosenRegion<-img3_local[-c(a:b,c:d),-c(e:f,g:h),]
+				chosenRegion <- array(chosenRegion,dim=c(nrow(chosenRegion),ncol(chosenRegion),dim(img3_local)[3]))
+				for (i in 1:get('numbands2',envir=ripaEnv)){
 					regionValues[[i]] <- as.vector(chosenRegion[,,i])
 				}
-				regionsList[[length(regionsList)+1]] <<- list(Type=regionType,Values=regionValues,Visual=chosenRegion)
+
+				regionsList_local <- get('regionsList',envir=ripaEnv)
+
+				regionsList_local[[length(regionsList_local)+1]] <- list(Type=get('regionType',envir=ripaEnv),Values=regionValues,Visual=chosenRegion)
 				
-				names(regionsList)[[length(regionsList)]] <<-paste("Region",length(regionsList),sep=" ")
-				length(names(regionsList)) <<- length(regionsList)
+				names(regionsList_local)[[length(regionsList_local)]] <-paste("Region",length(regionsList_local),sep=" ")
+				length(names(regionsList_local)) <- length(regionsList_local)
+				assign('regionsList',regionsList_local,envir=ripaEnv)
 				
-				if (numbands2>3){
-					auximg <- array(c(chosenRegion[,,visualBands2[1]],chosenRegion[,,visualBands2[2]],chosenRegion[,,visualBands2[3]]),c(nrow(chosenRegion),ncol(chosenRegion),numbands2))
+				if (get('numbands2',envir=ripaEnv)>3){
+					auximg <- array(c(chosenRegion[,,visualBands2_local[1]],chosenRegion[,,visualBands2_local[2]],chosenRegion[,,visualBands2_local[3]]),c(nrow(chosenRegion),ncol(chosenRegion),get('numbands2',envir=ripaEnv)))
 					cRegion <-tkrplot(ttregion, function() plot(imagematrix(auximg,noclipping=TRUE)),vscale=0.8,hscale=0.8)
 					tkpack(cRegion)
 				}else{
@@ -2311,15 +2557,16 @@ RIPAgui <- function(){
 				
 				showRegionStatistics(regionValues)
 				
-				if (exists("ttregionsbands1")) tkdestroy(ttregionsbands1)
-				if (exists("ttregionsbands2")) tkdestroy(ttregionsbands2)
+				
 			}
 			
 			OnLeftClick3 <- function(x,y){
+				img3_local <- get('img3',envir=ripaEnv)
+				imgtmp2_local <- get('imgtmp2',envir=ripaEnv)
 				xClick <- x
 				yClick <- y
-				width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp2)))
-				height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp2)))
+				width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp2_local)))
+				height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp2_local)))
 				
 				xMin <- parPlotSize2[1] * width
 				xMax <- parPlotSize2[2] * width
@@ -2329,8 +2576,8 @@ RIPAgui <- function(){
 				rangeX <- usrCoords2[2] - usrCoords2[1]
 				rangeY <- usrCoords2[4] - usrCoords2[3]
 				
-				imgXcoords <- (xCoords2-usrCoords2[1])*(xMax-xMin)/rangeX + xMin
-				imgYcoords <- (yCoords2-usrCoords2[3])*(yMax-yMin)/rangeY + yMin
+				imgXcoords <- (get('xCoords2',envir=ripaEnv)-usrCoords2[1])*(xMax-xMin)/rangeX + xMin
+				imgYcoords <- (get('yCoords2',envir=ripaEnv)-usrCoords2[3])*(yMax-yMin)/rangeY + yMin
 				
 				xClick <- as.numeric(xClick)+0.5
 				yClick <- as.numeric(yClick)+0.5
@@ -2340,44 +2587,50 @@ RIPAgui <- function(){
 				yPlotCoord <- usrCoords2[3]+(yClick-yMin)*rangeY/(yMax-yMin)
 				
 				a <- round(xPlotCoord)
-				b <- round(nrow(img3) - yPlotCoord)
+				b <- round(nrow(img3_local) - yPlotCoord)
 				
-				if (a<0 || b<0 || a>ncol(img3) || b>nrow(img3)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
+				if (a<0 || b<0 || a>ncol(img3_local) || b>nrow(img3_local)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
 				else{
-					regionPointsX <<- c(regionPointsX,a)
-					regionPointsY <<- c(regionPointsY,b)
+					assign('regionPointsX',c(get('regionPointsX',envir=ripaEnv),a),envir=ripaEnv)
+					assign('regionPointsY',c(get('regionPointsY',envir=ripaEnv),b),envir=ripaEnv)
 				}
-				if (length(regionPointsX)==2) rectangleRegion()
+				if (length(get('regionPointsX',envir=ripaEnv))==2) rectangleRegion()
 			}
 			
 			circleRegion <- function(){
-				tkdestroy(ttpoints)
+				img3_local <- get('img3',envir=ripaEnv)
+				regionPointsX_local <- get('regionPointsX',envir=ripaEnv)
+				regionPointsY_local <- get('regionPointsY',envir=ripaEnv)
+				visualBands2_local <- get('visualBands2',envir=ripaEnv)
+				tkdestroy(get('ttpoints',envir=ripaEnv))
 				
 				ttregion <- tktoplevel()
 				tkwm.geometry(ttregion,"+0+0")
 				tkwm.resizable(ttregion,0,0)
-				tktitle(ttregion)<-paste("Region",length(regionsList)+1)
+				tktitle(ttregion)<-paste("Region",length(get('regionsList',envir=ripaEnv))+1)
 				
-				x1<-as.integer(regionPointsX[1])
-				x2<-as.integer(regionPointsX[2])
-				y1<-as.integer(regionPointsY[1])
-				y2<-as.integer(regionPointsY[2])
+				x1<-as.integer(regionPointsX_local[1])
+				x2<-as.integer(regionPointsX_local[2])
+				y1<-as.integer(regionPointsY_local[1])
+				y2<-as.integer(regionPointsY_local[2])
 				
 				regionValues <- list()
-				chosenRegion<-img3
-				for (i in 1:numbands2){
-					out <- .C("inCircle",x1,x2,y1,y2,outregion=as.double(as.vector(t(as.matrix(img3[,,i])))),as.integer(nrow(img3)),as.integer(ncol(img3)),rValues = as.double(rep(0,nrow(img3)*ncol(img3))),regionLength=as.integer(0),PACKAGE="ripa")
+				chosenRegion<-img3_local
+				for (i in 1:get('numbands2',envir=ripaEnv)){
+					out <- .C("inCircle",x1,x2,y1,y2,outregion=as.double(as.vector(t(as.matrix(img3_local[,,i])))),as.integer(nrow(img3_local)),as.integer(ncol(img3_local)),rValues = as.double(rep(0,nrow(img3_local)*ncol(img3_local))),regionLength=as.integer(0),PACKAGE="ripa")
 					regionValues[[i]]<-out$rValues[1:(out$regionLength-1)]
-					chosenRegion[,,i]<-matrix(out$outregion,nrow=nrow(img3),byrow=T)
+					chosenRegion[,,i]<-matrix(out$outregion,nrow=nrow(img3_local),byrow=T)
 				}
 
-				regionsList[[length(regionsList)+1]] <<- list(Type=regionType,Values=regionValues,Visual=chosenRegion)
+				regionsList_local <- get('regionsList',envir=ripaEnv)
+				regionsList_local[[length(regionsList_local)+1]] <- list(Type=get('regionType',envir=ripaEnv),Values=regionValues,Visual=chosenRegion)
 						
-				names(regionsList)[[length(regionsList)]] <<-paste("Region",length(regionsList),sep=" ")
-				length(names(regionsList)) <<- length(regionsList)
+				names(regionsList_local)[[length(regionsList_local)]] <-paste("Region",length(regionsList_local),sep=" ")
+				length(names(regionsList_local)) <- length(regionsList_local)
+				assign('regionsList',regionsList_local,envir=ripaEnv)
 				
-				if (numbands2>3){
-					auximg <- array(c(chosenRegion[,,visualBands2[1]],chosenRegion[,,visualBands2[2]],chosenRegion[,,visualBands2[3]]),c(nrow(chosenRegion),ncol(chosenRegion),numbands2))
+				if (get('numbands2',envir=ripaEnv)>3){
+					auximg <- array(c(chosenRegion[,,visualBands2_local[1]],chosenRegion[,,visualBands2_local[2]],chosenRegion[,,visualBands2_local[3]]),c(nrow(chosenRegion),ncol(chosenRegion),get('numbands2',envir=ripaEnv)))
 					cRegion <-tkrplot(ttregion, function() plot(imagematrix(auximg,noclipping=TRUE)),vscale=0.8,hscale=0.81)
 					tkpack(cRegion)
 				}else{
@@ -2387,15 +2640,15 @@ RIPAgui <- function(){
 				
 				showRegionStatistics(regionValues)
 				
-				if (exists("ttregionsbands1")) tkdestroy(ttregionsbands1)
-				if (exists("ttregionsbands2")) tkdestroy(ttregionsbands2)
 			}
 			
 			OnLeftClick4 <- function(x,y){
+				img3_local <- get('img3',envir=ripaEnv)
+				imgtmp2_local <- get('imgtmp2',envir=ripaEnv)
 				xClick <- x
 				yClick <- y
-				width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp2)))
-				height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp2)))
+				width  <- as.numeric(tclvalue(tkwinfo("reqwidth",imgtmp2_local)))
+				height <- as.numeric(tclvalue(tkwinfo("reqheight",imgtmp2_local)))
 				
 				xMin <- parPlotSize2[1] * width
 				xMax <- parPlotSize2[2] * width
@@ -2405,8 +2658,8 @@ RIPAgui <- function(){
 				rangeX <- usrCoords2[2] - usrCoords2[1]
 				rangeY <- usrCoords2[4] - usrCoords2[3]
 				
-				imgXcoords <- (xCoords2-usrCoords2[1])*(xMax-xMin)/rangeX + xMin
-				imgYcoords <- (yCoords2-usrCoords2[3])*(yMax-yMin)/rangeY + yMin
+				imgXcoords <- (get('xCoords2',envir=ripaEnv)-usrCoords2[1])*(xMax-xMin)/rangeX + xMin
+				imgYcoords <- (get('yCoords2',envir=ripaEnv)-usrCoords2[3])*(yMax-yMin)/rangeY + yMin
 				
 				xClick <- as.numeric(xClick)+0.5
 				yClick <- as.numeric(yClick)+0.5
@@ -2416,42 +2669,48 @@ RIPAgui <- function(){
 				yPlotCoord <- usrCoords2[3]+(yClick-yMin)*rangeY/(yMax-yMin)
 				
 				a <- round(xPlotCoord)
-				b <- round(nrow(img3) - yPlotCoord)
+				b <- round(nrow(img3_local) - yPlotCoord)
 				
-				if (a<0 || b<0 || a>ncol(img3) || b>nrow(img3)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
+				if (a<0 || b<0 || a>ncol(img3_local) || b>nrow(img3_local)) tkmessageBox(title="Error",message="Please, click inside the image!",icon="error",type="ok")
 				else{
-					regionPointsX <<- c(regionPointsX,a)
-					regionPointsY <<- c(regionPointsY,b)
+					assign('regionPointsX',c(get('regionPointsX',envir=ripaEnv),a),envir=ripaEnv)
+					assign('regionPointsY',c(get('regionPointsY',envir=ripaEnv),b),envir=ripaEnv)
 				}
-				if (length(regionPointsX)==2) circleRegion()
+				if (length(get('regionPointsX',envir=ripaEnv))==2) circleRegion()
 			}
 			
-			regionPointsX <<- NULL
-			regionPointsY <<- NULL
-			ttpoints <<- tktoplevel()
+			
+			assign('regionPointsX',NULL,envir=ripaEnv)
+			assign('regionPointsY',NULL,envir=ripaEnv)
+			
+			assign('ttpoints',tktoplevel(),envir=ripaEnv)
 				
-			xCoords2<<-(1:ncol(img3))
-			yCoords2<<-(1:nrow(img3))
+			assign('xCoords2',(1:ncol(img3_local)),envir=ripaEnv)
+			assign('yCoords2',(1:nrow(img3_local)),envir=ripaEnv)
 			parPlotSize2 <- c()
 			usrCoords2 <- c()
 			
-			imgtmp2 <<- tkrplot(ttpoints,fun=plotFunction2,hscale=1.5,vscale=1.5)
-			tkgrid(imgtmp2)
-		
-			if (regionType == "Free"){
-				tkbind(imgtmp2, "<Button-1>",OnLeftClick2)
-				tkbind(imgtmp2, "<Button-3>",OnRightClick)
-				tkwm.title(ttpoints,"Choose the points clicking on the left button of the mouse")
+			assign('imgtmp2',tkrplot(get('ttpoints',envir=ripaEnv),fun=plotFunction2,hscale=1.5,vscale=1.5),envir=ripaEnv)
+			imgtmp2_local <- get('imgtmp2',envir=ripaEnv)
+			
+			tkgrid(imgtmp2_local)
+			
+			if (get('regionType',envir=ripaEnv) == "Free"){
+				tkbind(imgtmp2_local, "<Button-1>",OnLeftClick2)
+				tkbind(imgtmp2_local, "<Button-3>",OnRightClick)
+				tkwm.title(get('ttpoints',envir=ripaEnv),"Choose the points clicking on the left button of the mouse")
 			}
-			if (regionType == "Rectangle"){
-				tkbind(imgtmp2, "<Button-1>",OnLeftClick3)
-				tkwm.title(ttpoints,"Choose the top left and the bottom right points")
+			if (get('regionType',envir=ripaEnv) == "Rectangle"){
+				tkbind(imgtmp2_local, "<Button-1>",OnLeftClick3)
+				tkwm.title(get('ttpoints',envir=ripaEnv),"Choose the top left and the bottom right points")
 			}
-			if (regionType == "Circle"){
-				tkbind(imgtmp2, "<Button-1>",OnLeftClick4)
-				tkwm.title(ttpoints,"Choose the center and the radius of the circle")
+			if (get('regionType',envir=ripaEnv) == "Circle"){
+				tkbind(imgtmp2_local, "<Button-1>",OnLeftClick4)
+				tkwm.title(get('ttpoints',envir=ripaEnv),"Choose the center and the radius of the circle")
 			}
-			tkconfigure(imgtmp2,cursor="hand2")
+			tkconfigure(imgtmp2_local,cursor="hand2")
+			assign('imgtmp2',imgtmp2_local,envir=ripaEnv)
+			
 			
 		}
 		
@@ -2474,19 +2733,19 @@ RIPAgui <- function(){
 			kindChoice <- as.numeric(tkcurselection(tl))+1
 			if (kindChoice==1){
 				tkdestroy(ttkindregions)
-				regionType <<- "Rectangle"
+				assign('regionType',"Rectangle",envir=ripaEnv)
 				chooseRegion()
 			}
 			
 			if (kindChoice==2){
 				tkdestroy(ttkindregions)
-				regionType <<- "Circle"
+				assign('regionType',"Circle",envir=ripaEnv)
 				chooseRegion()
 			}
 			
 			if (kindChoice==3){
 				tkdestroy(ttkindregions)
-				regionType <<- "Free"
+				assign('regionType',"Free",envir=ripaEnv)
 				chooseRegion()
 			}
 		}
@@ -2498,14 +2757,14 @@ RIPAgui <- function(){
 
 	# Linear contrast stretch function
 	stretch <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
-		
-		if (is.null(img1)){
+		img1_local <- get('img1',envir=ripaEnv)
+		if (is.null(img1_local)){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -2517,13 +2776,16 @@ RIPAgui <- function(){
 		Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 		tkplace(Frame4,x=1,y=1)
 		
-		img2 <<- stretchImg(img1)
-		
-		if (numbands1==1){
-			image <-tkrplot(Frame4, function() plot(imagematrix(img2)),vscale=1.04,hscale=0.98)
+		assign('img2',stretchImg(img1_local),envir=ripaEnv)
+		img2_local <- get('img2',envir=ripaEnv)
+		visualBands1_local <- get('visualBands1',envir=ripaEnv)
+
+
+		if (get('numbands1',envir=ripaEnv)==1){
+			image <-tkrplot(Frame4, function() plot(imagematrix(img2_local)),vscale=1.04,hscale=0.98)
 			tkpack(image)
 		}else{
-			auximg <- array(c(img2[,,visualBands1[1]],img2[,,visualBands1[2]],img2[,,visualBands1[3]]),c(nrow(img2),ncol(img2),numbands1))
+			auximg <- array(c(img2_local[,,visualBands1_local[1]],img2_local[,,visualBands1_local[2]],img2_local[,,visualBands1_local[3]]),c(nrow(img2_local),ncol(img2_local),get('numbands1',envir=ripaEnv)))
 			image <-tkrplot(Frame4, function() plot(imagematrix(auximg)),vscale=1.04,hscale=0.98)
 			tkpack(image)
 		}
@@ -2531,67 +2793,81 @@ RIPAgui <- function(){
 	
 	# Function to choose filters
 	filters <- function(opt){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
-	
-		if (is.null(img1)){
+		img1_local <- get('img1',envir=ripaEnv)
+		if (is.null(img1_local)){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
 		
 		if (opt==1){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(sobel(img1[,,i]))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(sobel(img1_local[,,i]))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==2){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(laplacian(img1[,,i]))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)		
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(laplacian(img1_local[,,i]))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==3){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(meanImg(matrix(img1[,,1],nrow=nrow(img1))))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(meanImg(matrix(img1_local[,,1],nrow=nrow(img1_local))))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==4){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(highpass(img1[,,i]))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(highpass(img1_local[,,i]))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==5){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(lowpass(img1[,,i]))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(lowpass(img1_local[,,i]))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==6){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(minImg(matrix(img1[,,1],nrow=nrow(img1))))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(minImg(matrix(img1_local[,,1],nrow=nrow(img1_local))))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==7){
-			img2 <<- img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- normalize(maxImg(matrix(img1[,,1],nrow=nrow(img1))))
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- normalize(maxImg(matrix(img1_local[,,1],nrow=nrow(img1_local))))
 			}
+			assign('img2',img2_local,envir=ripaEnv)
 		}
 		else if (opt==8){
 			ReturnVal <- modalDialog("Mask","Enter the mask length (3, 5, 7...)","")
 			if (ReturnVal=="ID_CANCEL")
 				return()
 			lenMask <- as.integer(ReturnVal)
-			img2<<-img1
-			img2 <<- medianImg(img1,lenMask)
+			assign('img2',img1_local,envir=ripaEnv)			
+			assign('img2',medianImg(img1_local,lenMask),envir=ripaEnv)			
 		}
 		
 		tkdestroy(Frame3)
@@ -2601,7 +2877,7 @@ RIPAgui <- function(){
 		Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 		tkplace(Frame4,x=1,y=1)
 		
-		image <-tkrplot(Frame4, function() plot(imagematrix(img2)),vscale=1.04,hscale=0.98)
+		image <-tkrplot(Frame4, function() plot(imagematrix(get('img2',envir=ripaEnv))),vscale=1.04,hscale=0.98)
 		tkpack(image)
 	}
 	#
@@ -2609,19 +2885,22 @@ RIPAgui <- function(){
 	# Function to choose segmentation techniques
 	segmentation <- function(opt){
 		# Function to apply thresholding to an image
+
+		img2_local <- get('img2',envir=ripaEnv)
+
 		thresholdingImg <- function(img,value){
 			return(thresholding(imagematrix(img),th=threshValue))
 		}
 		#
 	
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
-	
-		if (is.null(img1)){
+		img1_local <- get('img1',envir=ripaEnv)
+		if (is.null(img1_local)){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -2631,11 +2910,12 @@ RIPAgui <- function(){
 			if (ReturnVal=="ID_CANCEL")
 				return()
 			threshValue <- as.double(ReturnVal)
-			img2<<-img1
-			for (i in 1:numbands1){
-				img2[,,i] <<- thresholdingImg(img1[,,i],threshValue)
+			assign('img2',img1_local,envir=ripaEnv)
+			img2_local <- get('img2',envir=ripaEnv)
+			for (i in 1:get('numbands1',envir=ripaEnv)){
+				img2_local[,,i] <- thresholdingImg(img1_local[,,i],threshValue)
 			}
-			img2 <<- imagematrix(img2)
+			assign('img2',imagematrix(img2_local),envir=ripaEnv)
 		}
 		
 		tkdestroy(Frame3)
@@ -2645,29 +2925,29 @@ RIPAgui <- function(){
 		Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 		tkplace(Frame4,x=1,y=1)
 		
-		image <-tkrplot(Frame4, function() plot(img2),vscale=1.04,hscale=0.98)
+		image <-tkrplot(Frame4, function() plot(get('img2',envir=ripaEnv)),vscale=1.04,hscale=0.98)
 		tkpack(image)
 	}
 	#
 	
 	# Function to calculate the image index
 	qualityIndex <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
-	
-		if (is.null(img1)){
+		img1_local <- get('img1',envir=ripaEnv)
+		if (is.null(img1_local)){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
 	
-		image_x <- as.double(as.vector(t(as.matrix(img1))))
-		image_y <- as.double(as.vector(t(as.matrix(img2))))
-		ncol <- as.integer(ncol(img1))
-		nrow <- as.integer(nrow(img1))
+		image_x <- as.double(as.vector(t(as.matrix(get('img1',envir=ripaEnv)))))
+		image_y <- as.double(as.vector(t(as.matrix(get('img2',envir=ripaEnv)))))
+		ncol <- as.integer(ncol(img1_local))
+		nrow <- as.integer(nrow(img1_local))
 		ReturnVal <- modalDialog("Window","Enter the window length (common value: 8)","")
 		if (ReturnVal=="ID_CANCEL")
 			return()
@@ -2682,43 +2962,37 @@ RIPAgui <- function(){
 	
 	# Function to save the transformed image
 	saveImg <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
-		
-		if (aux==".1.1.2"){
+		tab <- checkTab()
+		imageType1_local <- get('imageType1',envir=ripaEnv)			
+
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
-		if (imageType1!="lan"){
-			tkmessageBox(title="Error",message="This operation works only for LAN images.",icon="error",type="ok")
-			return()
-		}
 
-		if (aux==".1.1.1"){
-			if (imageType1=="lan"){
+		if (tab=="1"){
+			if (imageType1_local=="lan"){
 				saveLan()
+			}
+
+			if (imageType1_local=="jpgGrey" || imageType1_local=="jpgRGB"){
+				saveJPG()
+			}
+
+			if (imageType1_local=="pngGrey" || imageType1_local=="pngRGB"){
+				savePNG()
 			}
 		}
 		
-		#name <- tkgetSaveFile(filetypes="{{JPEG Files} {.jpg .jpeg}}")
-		#if (!nchar(tclvalue(name))){
-		#	tkmessageBox(title="Error",message="No file was selected!")
-		#	return()
-		#}
-		#name <- tclvalue(name)
-		#jpeg(name)
-		
-		#if (aux==0) plot.imagematrix(img2)
-		#if (aux==1) plot.imagematrix(img4)
-		#dev.off()
 	}
 	#
 	
 	# Function to read AVIRIS images
 	openAVIRIS <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 
-		if (aux==".1.1.1"){
-			AVIRISbands1 <<- NULL
+		if (tab=="1"){
+			assign('AVIRISbands1',NULL,envir=ripaEnv)
 			.Tcl(paste(slider, "set",0))
 			.Tcl(paste(slider2, "set",1))
 	
@@ -2739,10 +3013,10 @@ RIPAgui <- function(){
 			tkplace(Frame2,x=1,y=1)
 		}
 		
-		if (aux==".1.1.2"){
-			AVIRISbands2 <<- NULL
-			regionsList<<-list()
-			regionsListAux<<-list()
+		if (tab=="2"){
+			assign('AVIRISbands2',NULL,envir=ripaEnv)
+			assign('regionsList',list(),envir=ripaEnv)
+			assign('regionsListAux',list(),envir=ripaEnv)
 			
 			tkconfigure(statisticsTxt,state="normal")
 			tkdelete(statisticsTxt,"1.0","end")
@@ -2751,15 +3025,15 @@ RIPAgui <- function(){
 			tkdestroy(Frame5)
 		
 			Frame5 <- tkframe(lb2,relief="groove",borderwidth=2)
-			tkconfigure(Frame5,width=485,height=510)
+			tkconfigure(Frame5,width=480,height=510)
 			tkplace(Frame5,x=10,y=30)
 	
 			Frame6 <- tkframe(Frame5,relief="groove",borderwidth=0)
 			tkplace(Frame6,x=1,y=1)	
 		}
 		
-		## Aqui come� parte com amostras das bandas
-		bandsSet <<- c(rep(FALSE,224))
+		## Bands samples
+		assign('bandsSet',c(rep(FALSE,224)),envir=ripaEnv)
  		fileName <- tkgetOpenFile(filetypes="{{AVIRIS Files} {.a.log}}")
  		if (!nchar(tclvalue(fileName))){
  			tkmessageBox(message="No file was selected!")
@@ -2779,14 +3053,16 @@ RIPAgui <- function(){
 		tkgrid(lab,row=1,column=1)
 		sampleList <<- list()
 		OnClick <- function(W){
+			bandsSet_local <- get('bandsSet',envir=ripaEnv)
 			band <- as.integer(strsplit(W,paste(subfID,".lab",sep=""))[[1]][2])
-			if (bandsSet[band]==TRUE){
+			if (bandsSet_local[band]==TRUE){
 				tkmessageBox(title="Band number",message=paste("Band ",band," deselected!",sep=""),type="ok")
-				bandsSet[band] <<- FALSE
+				bandsSet_local[band] <- FALSE
 			}else{
 				tkmessageBox(title="Band number",message=paste("Band ",band," selected!",sep=""),type="ok")
-				bandsSet[band] <<- TRUE
+				bandsSet_local[band] <- TRUE
 			}
+			assign('bandsSet',bandsSet_local,envir=ripaEnv)
 		}
 		r <- 2
 		imagetmp <- limage(as.character(fileName),"reflectance")
@@ -2794,7 +3070,7 @@ RIPAgui <- function(){
 		pb <- tkProgressBar(title = "Generating samples...", min = 0, max = 224, width = 300)		
 		for (i in (1:224))
 		{
-			## Aqui tem que pegar a amostra da banda i e colocar em img
+			## Take samples from band i and put into img
 			img <- clineal(lbandsample(imagetmpScene2,i)@data,0,1)
 			if (is.nan(img[1])){
 				for (j in 1:length(img)) img[j] <- 0
@@ -2823,37 +3099,37 @@ RIPAgui <- function(){
 			tkbind(sampleList[[i]], "<Button-1>",OnClick)
 			setTkProgressBar(pb, i, label=paste(round(i/224*100, 0),"% done"))
 		}
-		## Aqui termina parte com amostras
+		## End of samples part
 		close(pb)
 
 		onOK <- function(){
 			tkdestroy(ttsamples)
 			countbands <- 0
-			
+			bandsSet_local <- get('bandsSet',envir=ripaEnv)
 			for (i in 1:224){
-				if (bandsSet[i]==TRUE){
+				if (bandsSet_local[i]==TRUE){
 					countbands <- countbands + 1
-					if (aux==".1.1.1") AVIRISbands1 <<- c(AVIRISbands1,i)
-					else AVIRISbands2 <<- c(AVIRISbands2,i)
+					if (tab=="1") assign('AVIRISbands1',c(get('AVIRISbands1',envir=ripaEnv),i),envir=ripaEnv)	
+					else assign('AVIRISbands2',c(get('AVIRISbands2',envir=ripaEnv),i),envir=ripaEnv)
 				}
 			}
 			
-			if (aux==".1.1.1"){
-				img1 <<- read.aviris(as.character(fileName))
-				image <-tkrplot(Frame2, function() plot(imagematrix(img1)),vscale=1.04,hscale=0.98)
+			if (tab=="1"){
+				assign('img1',read.aviris(as.character(fileName)),envir=ripaEnv)
+				image <-tkrplot(Frame2, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
  				tkpack(image)
- 				image <-tkrplot(Frame4, function() plot(imagematrix(img1)),vscale=1.04,hscale=0.98)
+ 				image <-tkrplot(Frame4, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
  				tkpack(image)
- 				img2 <<- img1
- 				numbands1 <<- countbands
- 				imageType1 <<- "jpgRGB"
+				assign('img2',get('img1',envir=ripaEnv),envir=ripaEnv)
+ 				assign('numbands1',countbands,envir=ripaEnv)
+ 				assign('imageType1',"jpgRGB",envir=ripaEnv)
 			}
-			if (aux==".1.1.2"){
-				img3 <<- read.aviris(as.character(fileName))
-				image <-tkrplot(Frame6, function() plot(imagematrix(img3)),vscale=1.04,hscale=0.98)
+			if (tab=="2"){
+				assign('img3',read.aviris(as.character(fileName)),envir=ripaEnv)
+				image <-tkrplot(Frame6, function() plot(imagematrix(get('img3',envir=ripaEnv))),vscale=1.04,hscale=0.98)
  				tkpack(image)
- 				numbands2 <<- countbands
- 				imageType2 <<- "jpgRGB"
+ 				assign('numbands2',countbands,envir=ripaEnv)
+ 				assign('imageType2',"jpgRGB",envir=ripaEnv)
 			}
 		}
 		
@@ -2864,16 +3140,16 @@ RIPAgui <- function(){
 	
 	# Function to read LAN images
 	openLan <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 				
-		if (aux==".1.1.1"){
-			AVIRISbands1 <<- NULL
+		if (tab=="1"){
+			assign('AVIRISbands1',NULL,envir=ripaEnv)
 			.Tcl(paste(slider, "set",0))
 			.Tcl(paste(slider2, "set",1))
 	
 			tkdestroy(Frame3)
 			Frame3 <- tkframe(lb1,relief="groove",borderwidth=2)
-			tkconfigure(Frame3,width=485,height=510)
+			tkconfigure(Frame3,width=480,height=510)
 			tkplace(Frame3,x=510,y=30)
 			
 			Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
@@ -2888,10 +3164,10 @@ RIPAgui <- function(){
 			tkplace(Frame2,x=1,y=1)
 		}
 		
-		if (aux==".1.1.2"){
-			AVIRISbands2 <<- NULL
-			regionsList<<-list()
-			regionsListAux<<-list()
+		if (tab=="2"){
+			assign('AVIRISbands2',NULL,envir=ripaEnv)
+			assign('regionsList',list(),envir=ripaEnv)
+			assign('regionsListAux',list(),envir=ripaEnv)
 			
 			tkconfigure(statisticsTxt,state="normal")
 			tkdelete(statisticsTxt,"1.0","end")
@@ -2900,7 +3176,7 @@ RIPAgui <- function(){
 			tkdestroy(Frame5)
 		
 			Frame5 <- tkframe(lb2,relief="groove",borderwidth=2)
-			tkconfigure(Frame5,width=485,height=510)
+			tkconfigure(Frame5,width=480,height=510)
 			tkplace(Frame5,x=10,y=30)
 	
 			Frame6 <- tkframe(Frame5,relief="groove",borderwidth=0)
@@ -2916,31 +3192,35 @@ RIPAgui <- function(){
 		}
 		arquivo<-tclvalue(arquivo)
 		
-		if (aux==".1.1.1") img1 <<- read.lan(arquivo)
-		if (aux==".1.1.2") img3 <<- read.lan(arquivo)
-		
-		if (aux==".1.1.1"){
-			image <-tkrplot(Frame2, function() plot(imagematrix(img1)),vscale=1.04,hscale=0.98)
-			tkpack(image)
-			image <-tkrplot(Frame4, function() plot(imagematrix(img1)),vscale=1.04,hscale=0.98)
-			tkpack(image)
-			img2 <<- img1
-			numbands1 <<- 7
-			imageType1 <<- "lan"
+		if (tab=="1"){
+			assign('img1',read.lan(arquivo),envir=ripaEnv)
+		}
+		if (tab=="2"){
+			assign('img3',read.lan(arquivo),envir=ripaEnv)
 		}
 		
-		if (aux==".1.1.2"){
-			image <-tkrplot(Frame6, function() plot(imagematrix(img3)),vscale=1.04,hscale=0.98)
+		if (tab=="1"){
+			image <-tkrplot(Frame2, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
 			tkpack(image)
-			numbands2 <<- 7
-			imageType2 <<- "lan"
+			image <-tkrplot(Frame4, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
+			tkpack(image)
+			assign('img2',get('img1',envir=ripaEnv),envir=ripaEnv)
+			assign('numbands1',7,envir=ripaEnv)
+			assign('imageType1',"lan",envir=ripaEnv)
+		}
+		
+		if (tab=="2"){
+			image <-tkrplot(Frame6, function() plot(imagematrix(get('img3',envir=ripaEnv))),vscale=1.04,hscale=0.98)
+			tkpack(image)
+			assign('numbands2',7,envir=ripaEnv)
+			assign('imageType2',"lan",envir=ripaEnv)
 		}
 	}
 	#
 	
 	# Function to write LAN images
 	saveLan <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 		
 		arquivo <- tkgetSaveFile(filetypes="{{LAN Files} {.lan}}")
 		if (!nchar(tclvalue(arquivo))){
@@ -2949,24 +3229,57 @@ RIPAgui <- function(){
 		}
 		arquivo<-tclvalue(arquivo)
 		
-		if (aux==".1.1.1") write.lan(arquivo,img2)
-		#if (aux==".1.1.2") img3 <<- read.lan(arquivo)
+		if (tab=="1") write.lan(arquivo,get('img2',envir=ripaEnv))
 	}
 	#
 	
+	# Function to write JPEG images
+	saveJPG <- function(){
+
+		
+
+		arquivo <- tkgetSaveFile(filetypes="{{JPEG Files} {.jpg .jpeg}}")
+		if (!nchar(tclvalue(arquivo))){
+			tkmessageBox(message="No file was selected!")
+			return()
+		}
+		arquivo<-tclvalue(arquivo)
+		
+		if (get('numbands1',envir=ripaEnv)>3){		
+			img2_local <- get('img2',envir=ripaEnv)
+			visualBands1_local <- get('visualBands1',envir=ripaEnv)
+			auximg <- array(c(img2_local[,,visualBands1_local[1]],img2_local[,,visualBands1_local[2]],img2_local[,,visualBands1_local[3]]),c(nrow(img2_local),ncol(img2_local),3))
+			writeJPEG(auximg,arquivo,quality=100)
+		} else	writeJPEG(get('img2',envir=ripaEnv),arquivo,quality=100)
+	}
+
+	savePNG <- function(){
+		arquivo <- tkgetSaveFile(filetypes="{{PNG Files} {.png}}")
+		if (!nchar(tclvalue(arquivo))){
+			tkmessageBox(message="No file was selected!")
+			return()
+		}
+		arquivo<-tclvalue(arquivo)
+		writePNG(get('img2',envir=ripaEnv),arquivo)
+	}
+
 	# Funciton to check tab and call openJpg function
-	checkTab <- function(){
+	openJPG <- function(){
+
+		
 		
 		# Function to read JPG images Tab 0
 		openJpgTabOne <- function(){
 			
+			
+
 			.Tcl(paste(slider, "set",0))
 			.Tcl(paste(slider2, "set",1))
 		
 			tkdestroy(Frame3)
 			
 			Frame3 <- tkframe(lb1,relief="groove",borderwidth=2)
-			tkconfigure(Frame3,width=485,height=510)
+			tkconfigure(Frame3,width=480,height=510)
 			tkplace(Frame3,x=510,y=30)
 			
 			Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
@@ -2986,24 +3299,23 @@ RIPAgui <- function(){
 				tkmessageBox(title="Error",message="No file was selected!")
 				return()
 			}
-			
-			img1 <<- read.jpeg(arquivo)
-			image <-tkrplot(Frame2, function() plot(imagematrix(img1)),vscale=1.04,hscale=0.98)
+			assign('img1',readJPEG(tclvalue(arquivo)),envir=ripaEnv)
+			image <-tkrplot(Frame2, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
 			tkpack(image)
-			image <-tkrplot(Frame4, function() plot(imagematrix(img1)),vscale=1.04,hscale=0.98)
+			image <-tkrplot(Frame4, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
 			tkpack(image)
 			
-			if (is.na(dim(img1)[3])){
-				imageType1 <<- "jpgGrey"
-				numbands1 <<- 1
-				img1 <<- array(img1,dim=c(nrow(img1),ncol(img1),1))
-				img2 <<- img1
+			if (is.na(dim(get('img1',envir=ripaEnv))[3])){
+				assign('imageType1',"jpgGrey",envir=ripaEnv)
+				assign('numbands1',1,envir=ripaEnv)
+				assign('img1',array(get('img1',envir=ripaEnv),dim=c(nrow(get('img1',envir=ripaEnv)),ncol(get('img1',envir=ripaEnv)),1)),envir=ripaEnv)
+				assign('img2',get('img1',envir=ripaEnv))
 			}
 			else{
-				imageType1 <<- "jpgRGB"
-				numbands1 <<- 3
-				img1 <<- array(img1,dim=dim(img1))
-				img2 <<- img1
+				assign('imageType1',"jpgRGB",envir=ripaEnv)
+				assign('numbands1',3,envir=ripaEnv)
+				assign('img1',array(get('img1',envir=ripaEnv),dim=dim(get('img1',envir=ripaEnv))),envir=ripaEnv)
+				assign('img2',get('img1',envir=ripaEnv))
 			}
 		}
 		#
@@ -3011,8 +3323,8 @@ RIPAgui <- function(){
 		# Function to read jpeg image Tab 1
 		openJpgTabTwo <- function(){
 			
-			regionsList<<-list()
-			regionsListAux<<-list()
+			assign('regionsList',list(),envir=ripaEnv)
+			assign('regionsListAux',list(),envir=ripaEnv)
 			
 			tkconfigure(statisticsTxt,state="normal")
 			tkdelete(statisticsTxt,"1.0","end")
@@ -3021,7 +3333,7 @@ RIPAgui <- function(){
 			tkdestroy(Frame5)
 			
 			Frame5 <- tkframe(lb2,relief="groove",borderwidth=2)
-			tkconfigure(Frame5,width=485,height=510)
+			tkconfigure(Frame5,width=480,height=510)
 			tkplace(Frame5,x=10,y=30)
 		
 			Frame6 <- tkframe(Frame5,relief="groove",borderwidth=0)
@@ -3033,45 +3345,161 @@ RIPAgui <- function(){
 				return()
 			}
 			
-			img3 <<- read.jpeg(arquivo)
-			image <-tkrplot(Frame6, function() plot.imagematrix(img3),vscale=1.04,hscale=0.98)
+			assign('img3',readJPEG(tclvalue(arquivo)),envir=ripaEnv)
+			#img3_local <- get('img3',envir=ripaEnv)
+			image <-tkrplot(Frame6, function() plot(imagematrix(get('img3',envir=ripaEnv))),vscale=1.04,hscale=0.98)
 			tkpack(image)
-			if (is.na(dim(img3)[3])){
-				imageType2 <<- "jpgGrey"
-				numbands2 <<- 1
-				img3 <<- array(img3,dim=c(nrow(img3),ncol(img3),1))
+			if (is.na(dim(get('img3',envir=ripaEnv))[3])){
+				assign('imageType2',"jpgGrey",envir=ripaEnv)
+				assign('numbands2',1,envir=ripaEnv)
+				assign('img3',array(get('img3',envir=ripaEnv),dim=c(nrow(get('img3',envir=ripaEnv)),ncol(get('img3',envir=ripaEnv)),1)),envir=ripaEnv)
+				#assign('img3',array(img3_local,dim=c(nrow(img3_local),ncol(img3_local),1)))
 			}
 			else{
-				imageType2 <<- "jpgRGB"
-				numbands2 <<- 3
-				img3 <<- array(img3,dim=dim(img3))
+				assign('imageType2',"jpgRGB",envir=ripaEnv)
+				assign('numbands2',3,envir=ripaEnv)
+				assign('img3',array(get('img3',envir=ripaEnv),dim=dim(get('img3',envir=ripaEnv))),envir=ripaEnv)
+				#assign('img3',array(img3_local,dim=dim(img3_local)),envir=ripaEnv)
 			}
 		}
 		#
 		
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 				
-		if (aux==".1.1.1"){
+		if (tab=="1"){
 			openJpgTabOne()
-			AVIRISbands1 <<- NULL
+			assign('AVIRISbands1',NULL,envir=ripaEnv)
 		}
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			openJpgTabTwo()
-			AVIRISbands2 <<- NULL
+			assign('AVIRISbands2',NULL,envir=ripaEnv)
 		}
 	}
 	#
 	
+	# Funciton to check tab and call openPng function
+	openPNG <- function(){
+		
+
+		# Function to read PNG images Tab 0
+		openPngTabOne <- function(){
+			
+			.Tcl(paste(slider, "set",0))
+			.Tcl(paste(slider2, "set",1))
+		
+			tkdestroy(Frame3)
+			
+			Frame3 <- tkframe(lb1,relief="groove",borderwidth=2)
+			tkconfigure(Frame3,width=480,height=510)
+			tkplace(Frame3,x=510,y=30)
+			
+			Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
+			tkplace(Frame4,x=1,y=1)
+			
+			tkdestroy(Frame1)
+			
+			Frame1 <- tkframe(lb1,relief="groove",borderwidth=2)
+			tkconfigure(Frame1,width=485,height=510)
+			tkplace(Frame1,x=10,y=30)
+		
+			Frame2 <- tkframe(Frame1,relief="groove",borderwidth=0)
+			tkplace(Frame2,x=1,y=1)
+			
+			arquivo <- tkgetOpenFile(filetypes="{{PNG Files} {.png}}")
+			if (!nchar(tclvalue(arquivo))){
+				tkmessageBox(title="Error",message="No file was selected!")
+				return()
+			}
+			assign('img1',readPNG(tclvalue(arquivo)),envir=ripaEnv)
+
+			image <-tkrplot(Frame2, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
+			tkpack(image)
+			image <-tkrplot(Frame4, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
+			tkpack(image)
+			
+			if (is.na(dim(get('img1',envir=ripaEnv))[3])){
+				assign('imageType1',"pngGrey",envir=ripaEnv)
+				assign('numbands1',1,envir=ripaEnv)
+				assign('img1',array(get('img1',envir=ripaEnv),dim=c(nrow(get('img1',envir=ripaEnv)),ncol(get('img1',envir=ripaEnv)),1)),envir=ripaEnv)
+				assign('img2',get('img1',envir=ripaEnv),envir=ripaEnv)				
+			}
+			else{
+				assign('imageType1',"pngRGB",envir=ripaEnv)
+				assign('numbands1',3,envir=ripaEnv)
+				assign('img1',array(get('img1',envir=ripaEnv),dim=dim(get('img1',envir=ripaEnv))),envir=ripaEnv)
+				assign('img2',get('img1',envir=ripaEnv),envir=ripaEnv)
+			}
+		}
+		#
+		
+		# Function to read png image Tab 1
+		openPngTabTwo <- function(){
+			
+			assign('regionsList',list(),envir=ripaEnv)
+			assign('regionsListAux',list(),envir=ripaEnv)
+			
+			tkconfigure(statisticsTxt,state="normal")
+			tkdelete(statisticsTxt,"1.0","end")
+			tkconfigure(statisticsTxt,state="disable")
+			
+			tkdestroy(Frame5)
+			
+			Frame5 <- tkframe(lb2,relief="groove",borderwidth=2)
+			tkconfigure(Frame5,width=480,height=510)
+			tkplace(Frame5,x=10,y=30)
+		
+			Frame6 <- tkframe(Frame5,relief="groove",borderwidth=0)
+			tkplace(Frame6,x=1,y=1)
+			
+			arquivo <- tkgetOpenFile(filetypes="{{PNG Files} {.png}}")
+			if (!nchar(tclvalue(arquivo))){
+				tkmessageBox(message="No file was selected!")
+				return()
+			}
+			
+			assign('img3',readPNG(tclvalue(arquivo)),envir=ripaEnv)
+			#img3_local <- get('img3',envir=ripaEnv)
+			#image <-tkrplot(Frame6, function() plot(imagematrix(img3_local)),vscale=1.04,hscale=0.98)
+			image <-tkrplot(Frame6, function() plot(imagematrix(get('img3',envir=ripaEnv))),vscale=1.04,hscale=0.98)
+			tkpack(image)
+			if (is.na(dim(get('img3',envir=ripaEnv))[3])){
+				assign('imageType2',"pngGrey",envir=ripaEnv)
+				assign('numbands2',1,envir=ripaEnv)
+				assign('img3',array(get('img3',envir=ripaEnv),dim=c(nrow(get('img3',envir=ripaEnv)),ncol(get('img3',envir=ripaEnv)),1)),envir=ripaEnv)
+				#assign('img3',array(img3_local,dim=c(nrow(img3_local),ncol(img3_local),1)),envir=ripaEnv)
+			}
+			else{
+				assign('imageType2',"pngRGB",envir=ripaEnv)
+				assign('numbands2',3,envir=ripaEnv)
+				assign('img3',array(get('img3',envir=ripaEnv),dim=dim(get('img3',envir=ripaEnv))),envir=ripaEnv)
+				#assign('img3',array(img3_local,dim=dim(img3_local)),envir=ripaEnv)
+			}
+		}
+		#
+		
+		tab <- checkTab()
+				
+		if (tab=="1"){
+			openPngTabOne()
+			assign('AVIRISbands1',NULL,envir=ripaEnv)
+		}
+		if (tab=="2"){
+			openPngTabTwo()
+			assign('AVIRISbands2',NULL,envir=ripaEnv)
+		}
+	}
+	#
+
 	# Function to apply the negative function to an image
 	negative <- function(){
-		aux <- tclvalue(tcl(tn,"select"))
+		tab <- checkTab()
 		
-		if (aux==".1.1.2"){
+		if (tab=="2"){
 			tkmessageBox(title="Error",message="Please, use this menu only with the first tab!",icon="error",type="ok")
 			return()
 		}
 	
-		if (is.null(img1)){
+		if (is.null(get('img1',envir=ripaEnv))){
 			tkmessageBox(title="Error",message="Please, open an image in order to use it!",icon="error",type="ok")
 			return()
 		}
@@ -3083,28 +3511,32 @@ RIPAgui <- function(){
 		Frame4 <- tkframe(Frame3,relief="groove",borderwidth=0)
 		tkplace(Frame4,x=1,y=1)
 	
-		img2 <<- 1-img1
-		
-		if (numbands1>3){
-			auximg <- array(c(img2[,,visualBands1[1]],img2[,,visualBands1[2]],img2[,,visualBands1[3]]),c(nrow(img2),ncol(img2),numbands1))
+		assign('img2',1-get('img1',envir=ripaEnv),envir=ripaEnv)
+	
+
+		img2_local <- get('img2',envir=ripaEnv)
+		visualBands1_local <- get('visualBands1',envir=ripaEnv)
+
+		if (get('numbands1',envir=ripaEnv)>3){
+			auximg <- array(c(img2_local[,,visualBands1_local[1]],img2_local[,,visualBands1_local[2]],img2_local[,,visualBands1_local[3]]),c(nrow(img2_local),ncol(img2_local),get('numbands1',envir=ripaEnv)))
 			image <-tkrplot(Frame4, function() plot(imagematrix(auximg)),vscale=1.04,hscale=0.98)
 		}else{
-			image <-tkrplot(Frame4, function() plot(imagematrix(img2)),vscale=1.04,hscale=0.98)
+			image <-tkrplot(Frame4, function() plot(imagematrix(img2_local)),vscale=1.04,hscale=0.98)
 		}
 		tkpack(image)
 	}
 	#
 
 	showAbout <-function(){
-		tkmessageBox(title="About",message="R Image Processing and Analysis\n Version 1.0\n\n Talita Perciano - IME/USP \n Alejandro C. Frery - IC/UFAL",icon="info",type="ok")
+		tkmessageBox(title="About",message="R Image Processing and Analysis\nVersion 2.0-1\n\nTalita Perciano - LBNL, USA \nAlejandro C. Frery - IC/UFAL, Brazil",icon="info",type="ok")
 	}
 	
 	##################################################################################################################
 	
 
 	fontText <- tkfont.create(family="book",size=10)
-	fr1 <- tkframe(tn)
-	tkadd(tn,fr1,text="Operations")
+	fr1 <- tkframe(get('tn',envir=ripaEnv))
+	tkadd(get('tn',envir=ripaEnv),fr1,text="Operations")
 	lb1 <- ttklabelframe(fr1)
 	tkpack(lb1)
 	tkconfigure(lb1,labelanchor="n",text="Operations Tab",width=1010,height=665)
@@ -3172,8 +3604,8 @@ RIPAgui <- function(){
 	##################################################################################################################
 	####################################### ROI Tab ##################################################################
 	##################################################################################################################
-	fr2 <- tkframe(tn)
-	tkadd(tn,fr2,text="Regions of Interest")
+	fr2 <- tkframe(get('tn',envir=ripaEnv))
+	tkadd(get('tn',envir=ripaEnv),fr2,text="Regions of Interest")
 	lb2 <- ttklabelframe(fr2)
 	tkpack(lb2)
 	tkconfigure(lb2,labelanchor="n",text="Operations Tab",width=1010,height=665)
@@ -3333,8 +3765,9 @@ RIPAgui <- function(){
 	#
 	
 	# Image extensions inside Open menu
-	tkadd(openMenu,"command",label="JPG",command=checkTab,underline=0,accelerator="Ctrl+J")
-	tkbind(tt,"<Control-j>",function() checkTab())
+	tkadd(openMenu,"command",label="JPG",command=openJPG,underline=0,accelerator="Ctrl+J")
+	tkbind(tt,"<Control-j>",function() openJPG())
+	tkadd(openMenu,"command",label="PNG",command=openPNG,underline=0)
 	tkadd(openMenu,"command",label="LAN",command=openLan,underline=0,accelerator="Ctrl+L")
 	tkbind(tt,"<Control-l>",function() openLan())
 	tkadd(openMenu,"command",label="AVIRIS",command=openAVIRIS)
@@ -3372,7 +3805,7 @@ RIPAgui <- function(){
 	tkadd(topMenu,"cascade",label="Help",menu=helpMenu,underline=0)
 	#
 	
-	tkselect(tn,0)
+	tkselect(get('tn',envir=ripaEnv),0)
 	tkfocus(tt)
 }
 ##################################################################################################################

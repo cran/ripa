@@ -1,3 +1,11 @@
+/**
+
+   Copyright (c) 2014 Talita Perciano
+   complete license terms see file LICENSE_ripa
+
+**/
+
+
 #include	<stdio.h>
 
 void normalize(double *img, int *row, int *col, float *bri){

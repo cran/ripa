@@ -6,14 +6,14 @@
 R Image Processing and Analysis
 }
 \description{
-A package including various functions for image processing and analysis of JPG, LAN and AVIRIS images. The package contains many tools for statistical analysis of multispectral and hyperspectral images.
+A package including various functions for image processing and analysis. With this package is possible to process and analyse RGB, LAN (multispectral) and AVIRIS (hiperspectral) images. This packages also provides functions for reading JPEG files, extracted from the archived 'rimage' package.
 }
 \details{
 \tabular{ll}{
 Package: \tab ripa\cr
 Type: \tab Package\cr
-Version: \tab 1.0-1\cr
-Date: \tab 2009-07-17\cr
+Version: \tab 2.0-1\cr
+Date: \tab 2014-05-12\cr
 License: \tab GPL version 2 or newer\cr
 }
 }

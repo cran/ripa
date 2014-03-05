@@ -11,8 +11,8 @@ Zprofile(scene, X = NULL, Y = NULL)
 %- maybe also 'usage' for other objects documented here.
 \arguments{
   \item{scene}{Scene}
-  \item{X}{}
-  \item{Y}{}
+  \item{X}{X-coordinate}
+  \item{Y}{Y-coordinate}
 }
 
 \author{Marcelo Almiron and Adrian Muract}

@@ -1,0 +1,23 @@
+R Dependencies
+--------------
+
+The ripa package is built on top of some other R packages,
+all available from CRAN.
+
+Instead of each of these other packages being a dependency (Depend:)
+they are listed as suggested packages (Suggests:). This way, they will
+not all be loaded when ripa is started.
+
+Many of the packages are only required for specific
+functionality. Ripa will check the availability of a package and
+notify the user of its absence.
+
+Alternatively, when installing the ripa package, include the
+Suggests dependencies:
+
+> install.packages("ripa", dependencies=c("Depends", "Suggests"))
+
+Running the package
+-------------------
+
+To run the package just run RIPAgui() after the command library(ripa)

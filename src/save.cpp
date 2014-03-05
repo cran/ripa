@@ -1,5 +1,15 @@
+/**
+
+   Copyright (c) 2014 Talita Perciano
+   complete license terms see file LICENSE_ripa
+
+**/
+
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <Rcpp.h>
+using namespace Rcpp;
 
 /*
 Save Lan images
@@ -8,7 +18,7 @@ Save Lan images
 /*
 The header of an LAN image
 */
-struct header_type{
+struct header_type2{
 	char descriptor[6];
 	char ipack;
 	int numbands;
@@ -26,7 +36,7 @@ struct header_type{
 	float ymap;
 	float xcell;
 	float ycell;
-} header;
+} header_lan2;
 
 
 void writeLAN(char **filename1, char **filename2, int *in){
@@ -34,28 +44,30 @@ void writeLAN(char **filename1, char **filename2, int *in){
 	unsigned char l;
 	int i,j,k=0,n,nrow,ncol,nbands,**matrix;
 	if ((fp=fopen(*filename1,"rb"))==NULL){
-		printf("\nThe file could not be opened.\n");
+		//printf("\nThe file could not be opened.\n");
+        Rcerr << "in save::writeLAN()" << std::endl;
 		return;
 	}
-	fread(&header,sizeof(struct header_type),1,fp);
+	fread(&header_lan2,sizeof(struct header_type2),1,fp);
 	fclose(fp);
 	if ((fp=fopen(*filename2,"wb"))==NULL){
-		printf("\nThe file could not be opened.\n");
+		//printf("\nThe file could not be opened.\n");
+        Rcerr << "in lan::writeLAN()" << std::endl;
 		return;
 	}
-	fwrite(&header,sizeof(struct header_type),1,fp);
+	fwrite(&header_lan2,sizeof(struct header_type2),1,fp);
 	
-	nrow = header.numrows;
-	ncol = header.numcols;
+	nrow = header_lan2.numrows;
+	ncol = header_lan2.numcols;
 	n=nrow*ncol;
-	nbands = header.numbands;
+	nbands = header_lan2.numbands;
 	
 	matrix = (int**)calloc(n,sizeof(int *));
-	if (matrix==NULL) exit(1);
+	if (matrix==NULL) Rcerr << "in save::writeLAN()" << std::endl;
 	
 	for (i=0;i<n;i++){
 		matrix[i] = (int*)calloc(nbands,sizeof(int));
-		if (matrix[i]==NULL) exit(1);
+		if (matrix[i]==NULL) Rcerr << "in save::writeLAN()" << std::endl;
 	}
 	
 	k=0;

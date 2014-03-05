@@ -1,3 +1,10 @@
+/**
+
+   Copyright (c) 2014 Talita Perciano
+   complete license terms see file LICENSE_ripa
+
+**/
+
 #include	<stdio.h>
 #include	<math.h>
 #include        <stdlib.h>

@@ -1,8 +1,8 @@
-b7dceccf59bf1d5cbb8b59aebbf54e21 *DESCRIPTION
+429f7808257a68eac6e8884d745ea6ad *DESCRIPTION
 9fd247ff30a54089dea7883832515327 *INSTALL
 bec1515214da27870b1d3dd6590aec86 *LICENSE
 a55e1a34799c254258771627673d6286 *NAMESPACE
-4cb5abc7f73f60532d04b9b08cd10da2 *R/RIPA.R
+6f26cf7c9e9bfeac382a694c7c3741a2 *R/RIPA.R
 cf12882124e2a8a36bd2708aa854bda7 *R/fft_filter.R
 515ee165138eaff97031a223f9867cfd *R/freq.R
 8604e6337500f1ac3e2570b3e0154bad *R/imagematrix.R
@@ -47,7 +47,7 @@ e3fa6ff839265df04a405abf6ea91c4e *man/print_information.aviris_band.Rd
 6f829ad675a549bc4e8727e331912a5b *man/print_information.aviris_image.Rd
 a0e71bab423e5058905e7914b14cae6c *man/print_information.aviris_scene.Rd
 ddb4879176f68b87b3c3c1599018de89 *man/print_information.aviris_training.Rd
-b92979aabe88984695f8cd823c28bd05 *man/read.aviris.Rd
+292806e5b7001d429417c8aa9b0cff97 *man/read.aviris.Rd
 3599ac82f33d5c2a4707ce8d9da72c04 *man/read.lan.Rd
 6154f87d19a91b5287a64f9eb940c2d2 *man/rgb2grey.Rd
 d5d3b30e41f3c341d2000495f46e52fd *man/ripaEnv.Rd

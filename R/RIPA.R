@@ -97,6 +97,8 @@ lband <- function(scene,b){
 	Object <- new("aviris_band",scene@name,b,scene@type,scene@numberOfLines,
 		scene@samples,loadBand(path,X=b,C=scene@samples,F=scene@numberOfLines,
 		B=scene@bands))
+	Object@data <- clineal(Object@data,0,1)
+	return(Object)
 }
 
 lbandsample <- function(scene,b){
@@ -104,6 +106,8 @@ lbandsample <- function(scene,b){
 	Object <- new("aviris_band",scene@name,b,scene@type,scene@numberOfLines,
 		scene@samples,loadBandSample(path,X=b,C=scene@samples,F=30,
 		B=scene@bands))
+	Object@data <- clineal(Object@data,0,1)
+	return(Object)
 }
 
 
@@ -201,7 +205,12 @@ clineal <- function(Z,A,B){
 	rango <- (B - A)
 	rangoZ <- (max(Z)-minZ)
 	pendiente <- (rango/rangoZ)
-	pendiente*Z+(A-(pendiente*minZ))
+	res <- pendiente*Z+(A-(pendiente*minZ))
+	
+	if (is.nan(res[1])){
+		for (i in 1:length(res)) res[i] <- 0
+	}
+	return(res)
 }
 
 
@@ -633,6 +642,23 @@ write.lan <- function(arquivo,img){
 #
 
 # Function to apply the median filter to an image
+#medianImg <- function(img,mask){
+#	if (is.na(dim(img)[3])) img = array(img,dim=c(nrow(img),ncol(img),1))
+#	else img = array(img,dim=dim(img))
+#	n <- nrow(img)*ncol(img)
+#	nrow <- as.integer(nrow(img))
+#	ncol <- as.integer(ncol(img))
+#	mat <- img
+#	for (i in 1:dim(img)[3]){
+#		image <- as.double(as.vector(t(matrix(img[,,i],nrow=nrow(img)))))
+#		out <- .C("median",image,nrow, ncol,mask,outImg=as.double(rep(0.0,n)),PACKAGE="ripa")
+#		mat[,,i] <- matrix(out$outImg,ncol=ncol(img),byrow=T)
+#	}
+#	return(mat)
+#}
+#
+
+# Function to apply the median filter to an image
 medianImg <- function(img,mask){
 	if (is.na(dim(img)[3])) img = array(img,dim=c(nrow(img),ncol(img),1))
 	else img = array(img,dim=dim(img))
@@ -640,10 +666,22 @@ medianImg <- function(img,mask){
 	nrow <- as.integer(nrow(img))
 	ncol <- as.integer(ncol(img))
 	mat <- img
-	for (i in 1:dim(img)[3]){
-		image <- as.double(as.vector(t(matrix(img[,,i],nrow=nrow(img)))))
-		out <- .C("median",image,nrow, ncol,mask,outImg=as.double(rep(0.0,n)),PACKAGE="ripa")
-		mat[,,i] <- matrix(out$outImg,ncol=ncol(img),byrow=T)
+
+	if (tclvalue(get('useParallel',envir=ripaEnv))==1) {	
+		matrix = foreach(i=1:dim(img)[3],.combine=cbind,.packages=c('ripa')) %dopar% {
+			image <- as.double(as.vector(t(matrix(img[,,i],nrow=nrow(img)))))
+			out <- .C("median",image,nrow, ncol,mask,outImg=as.double(rep(0.0,n)),PACKAGE="ripa")
+			mat[,,i] <- matrix(out$outImg,ncol=ncol(img),byrow=T)
+		}
+		mat <- array(matrix,dim=dim(img))
+	}
+	else {
+
+		for (i in 1:dim(img)[3]){
+			image <- as.double(as.vector(t(matrix(img[,,i],nrow=nrow(img)))))
+			out <- .C("median",image,nrow, ncol,mask,outImg=as.double(rep(0.0,n)),PACKAGE="ripa")
+			mat[,,i] <- matrix(out$outImg,ncol=ncol(img),byrow=T)
+		}
 	}
 	return(mat)
 }
@@ -658,18 +696,32 @@ stretchImg <- function(img){
 	n <- nrow(img)*ncol(img)
 	a <- as.double(0)
 	b <- as.double(1)
-	for (i in 1:dim(img)[3]){
-		x <- quantile(img[,,i],seq(0,1,by=0.05))
-		c <- as.double(x[[2]])
-		d <- as.double(x[[20]])
-		res <- .C("stretch",img[,,i],a,b,c,d,as.integer(nrow(img)),as.integer(ncol(img)),out=as.double(rep(0,n)),PACKAGE="ripa")
-		mat <- matrix(res$out,ncol=ncol(img))
-		res_final[,,i] <- imagematrix(mat)
+
+	if (tclvalue(get('useParallel',envir=ripaEnv))==1) {	
+		matrix = foreach(i=1:dim(img)[3],.combine=cbind,.packages=c('ripa')) %dopar% {
+			x <- quantile(img[,,i],seq(0,1,by=0.05))
+			c <- as.double(x[[2]])
+			d <- as.double(x[[20]])
+			res <- .C("stretch",img[,,i],a,b,c,d,as.integer(nrow(img)),as.integer(ncol(img)),out=as.double(rep(0,n)),PACKAGE="ripa")
+			mat <- matrix(res$out,ncol=ncol(img))
+			res_final[,,i] <- imagematrix(mat)
+		}
+		res_final <- array(matrix,dim=dim(img))
+	}
+	else {
+
+		for (i in 1:dim(img)[3]){
+			x <- quantile(img[,,i],seq(0,1,by=0.05))
+			c <- as.double(x[[2]])
+			d <- as.double(x[[20]])
+			res <- .C("stretch",img[,,i],a,b,c,d,as.integer(nrow(img)),as.integer(ncol(img)),out=as.double(rep(0,n)),PACKAGE="ripa")
+			mat <- matrix(res$out,ncol=ncol(img))
+			res_final[,,i] <- imagematrix(mat)
+		}
 	}
 	return(res_final)
 }
 
-# Function to apply the new brightness and contrast
 contBriImg <- function(img,cont,bri){
 
 	if (is.na(dim(img)[3])) img <- array(img,dim=c(nrow(img),ncol(img),1))
@@ -677,28 +729,108 @@ contBriImg <- function(img,cont,bri){
 	
 	if (is.na(cont)) cont <- 1
 	if (is.na(bri)) bri <- 0
-	res_final<-img
-	for (i in 1:dim(img)[3]){
-		res <-as.matrix(img[,,i])
+	
+	img <- cont*img+bri
+	nrow <- as.integer(nrow(img))
+	ncol <- as.integer(ncol(img))
 		
-		res <- cont*res+bri
-		
-		nrow <- as.integer(nrow(res))
-		ncol <- as.integer(ncol(res))
-		
-		#out <- .C("normalize",image<-as.vector(as.double(res)),nrow,ncol,as.double(bri),PACKAGE="RIPA")
-		
-		#res <- matrix(image,nrow=nrow)
-
-		index <- which(res<0)
-		res[index] <- 0
-		index <- which(res>1)
-		res[index] <- 1
-		
-		res_final[,,i]<-res
-	}
-	return(res_final)
+	index <- which(img<0)
+	img[index] <- 0
+	index <- which(img>1)
+	img[index] <- 1
+	
+	return(img)
 }
+
+# Function to apply the new brightness and contrast
+#contBriImg <- function(img,cont,bri){
+#
+#	if (is.na(dim(img)[3])) img <- array(img,dim=c(nrow(img),ncol(img),1))
+#	else img <- array(img,dim=dim(img))
+#	
+#	if (is.na(cont)) cont <- 1
+#	if (is.na(bri)) bri <- 0
+#	res_final<-img
+#	for (i in 1:dim(img)[3]){
+#		res <-as.matrix(img[,,i])
+#		
+#		res <- cont*res+bri
+#		
+#		nrow <- as.integer(nrow(res))
+#		ncol <- as.integer(ncol(res))
+#		
+#		#out <- .C("normalize",image<-as.vector(as.double(res)),nrow,ncol,as.double(bri),PACKAGE="RIPA")
+#		
+#		#res <- matrix(image,nrow=nrow)
+#
+#		index <- which(res<0)
+#		res[index] <- 0
+#		index <- which(res>1)
+#		res[index] <- 1
+#		
+#		res_final[,,i]<-res
+#	}
+#	return(res_final)
+#}
+
+#contBriImg <- function(img,cont,bri){
+#
+#	if (is.na(dim(img)[3])) img <- array(img,dim=c(nrow(img),ncol(img),1))
+#	else img <- array(img,dim=dim(img))
+#	
+#	if (is.na(cont)) cont <- 1
+#	if (is.na(bri)) bri <- 0
+#	res_final<-img
+#
+#	if (tclvalue(get('useParallel',envir=ripaEnv))==1) {	
+#		matrix = foreach(i=1:dim(img)[3],.combine=cbind) %dopar% {
+#
+#			res <- as.matrix(img[,,i])
+#		
+#			res <- cont*res+bri
+#		
+#			nrow <- as.integer(nrow(res))
+#			ncol <- as.integer(ncol(res))
+#		
+#			#out <- .C("normalize",image<-as.vector(as.double(res)),nrow,ncol,as.double(bri),PACKAGE="RIPA")
+#		
+#			#res <- matrix(image,nrow=nrow)
+#
+#			index <- which(res<0)
+#			res[index] <- 0
+#			index <- which(res>1)
+#			res[index] <- 1
+#		
+#			res_final[,,i]<-res
+#		}
+#		res_final <- array(matrix,dim=dim(img))
+#	}
+#	else {
+#		
+#		for (i in 1:dim(img)[3]){
+#			res <-as.matrix(img[,,i])
+#		
+#			res <- cont*res+bri
+#		
+#			nrow <- as.integer(nrow(res))
+#			ncol <- as.integer(ncol(res))
+#		
+#			#out <- .C("normalize",image<-as.vector(as.double(res)),nrow,ncol,as.double(bri),PACKAGE="RIPA")
+#		
+#			#res <- matrix(image,nrow=nrow)
+#
+#			index <- which(res<0)
+#			res[index] <- 0
+#			index <- which(res>1)
+#			res[index] <- 1
+#		
+#			res_final[,,i]<-res
+#		}
+#	}
+#	
+#	
+#	return(res_final)
+#}
 
 #Check active tab
 checkTab <- function(){
@@ -710,29 +842,56 @@ checkTab <- function(){
 }
 
 # Function to read AVIRIS images
-read.aviris <- function(fileName){
-	tab <- checkTab()
+read.aviris <- function(fileName,bandsIndexes,bands_local,use_parallel){
+	strt<-Sys.time()
+	comb <- function(x, ...) {
+		lapply(seq_along(x),
+		function(i) c(x[[i]], lapply(list(...), function(y) y[[i]])))
+	}	
+
+	#tab <- checkTab()
  	
- 	if (tab=="1") bandsIndexes <- get('AVIRISbands1',envir=ripaEnv)
-	else bandsIndexes <- get('AVIRISbands2',envir=ripaEnv)
+ 	#if (tab=="1") bandsIndexes <- get('AVIRISbands1',envir=ripaEnv)
+	#else bandsIndexes <- get('AVIRISbands2',envir=ripaEnv)
 
 	img <- limage(as.character(fileName),"reflectance")
 	imgtmpScene2 <- lscene(img,2)
 	mat <- array(0,dim=c(512,614,length(bandsIndexes)))
-	assign('bands',vector(length=length(bandsIndexes),mode="list"),envir=ripaEnv)
-	bands_local <- get('bands',envir=ripaEnv)
-	
-	pb <- tkProgressBar(title = "Reading bands...", min = 0, max = length(bandsIndexes), width = 300)
-	for (i in 1:length(bandsIndexes)){
-		bands_local[[i]] <- lband(imgtmpScene2,bandsIndexes[i])
-		mat[,,i] <- clineal(bands_local[[i]]@data,0,1)
-		if (is.nan(mat[,,i][1])){
-			for (j in 1:length(mat[,,i])) mat[,,i][j] <- 0
+	#assign('bands',vector(length=length(bandsIndexes),mode="list"),envir=ripaEnv)
+	#bands_local <- get('bands',envir=ripaEnv)
+
+	tt <- tktoplevel()
+	tktitle(tt) <- "Read AVIRIS"
+	tkplace(tklabel(tt,text="Reading selected bands..."),x=5,y=1)
+	tkconfigure(tt,width=200,height=60)
+
+	if (use_parallel==1) {
+		matrix = foreach(i=1:length(bandsIndexes),.combine='comb',.packages=c("ripa")) %dopar% {
+			list(lband(imgtmpScene2,bandsIndexes[i]),lband(imgtmpScene2,bandsIndexes[i])@data)
+
+			#bands_local[[i]] <- lband(imgtmpScene2,bandsIndexes[i])
+			#mat[,,i] <- clineal(bands_local[[i]]@data,0,1)
+								
+			#setTkProgressBar(pb, i, label=paste(round(i/length(bandsIndexes)*100, 0),"% done"))
 		}
-		setTkProgressBar(pb, i, label=paste(round(i/length(bandsIndexes)*100, 0),"% done"))
+		mat <- array(unlist(matrix[[2]]),dim=dim(mat))
+		mat <- clineal(mat,0,1)
+		bands_local <- matrix[[1]]
 	}
+	else {
+		#pb <- tkProgressBar(title = "Reading bands...", min = 0, max = length(bandsIndexes), width = 300)
+		#setTkProgressBar(pb, 0, label="0% done")
+		for (i in 1:length(bandsIndexes)){
+			bands_local[[i]] <- lband(imgtmpScene2,bandsIndexes[i])
+			#mat[,,i] <- clineal(bands_local[[i]]@data,0,1)
+			mat[,,i] <- bands_local[[i]]@data
+			#setTkProgressBar(pb, i, label=paste(round(i/length(bandsIndexes)*100, 0),"% done"))
+		}
+		#close(pb)
+	}
+	tkdestroy(tt)
 	assign('bands',bands_local,envir=ripaEnv)
-	close(pb)
+	print(Sys.time()-strt)
 	return(mat)
 }
 
@@ -804,7 +963,7 @@ RIPAgui <- function(){
 	assign('regionPointsX',NULL,envir=ripaEnv)	
 	assign('regionPointsY',NULL,envir=ripaEnv)
 	assign('LANfile',NULL,envir=ripaEnv)	
-	assign('tn',NULL,envir=ripaEnv)	
+	assign('tn',NULL,envir=ripaEnv)
 	assign('ttregionsbands1',NULL,envir=ripaEnv)
 	assign('ttregionsbands2',NULL,envir=ripaEnv)
 	assign('regionChoice',NULL,envir=ripaEnv)
@@ -819,6 +978,10 @@ RIPAgui <- function(){
 	assign('bandSet',NULL,envir=ripaEnv)
 	assign('imgtmp',NULL,envir=ripaEnv)
 	assign('imgtmp2',NULL,envir=ripaEnv)
+	assign('numProcessors',tclVar(detectCores()),envir=ripaEnv)
+	assign('useParallel',tclVar(0),envir=ripaEnv)
+	assign('cluster',NULL,envir=ripaEnv)
+	#registerDoParallel(get('cluster',envir=ripaEnv))
 
 	##################################################################################################################
 
@@ -830,10 +993,10 @@ RIPAgui <- function(){
 		tkmessageBox(title="Error",message="Package BWidget was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
 		return()
 	}
-	if(!is.tclObj(tclRequire("Tktable"))){
-		tkmessageBox(title="Error",message="Package Tktable was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
-		return()
-	}
+	#if(!is.tclObj(tclRequire("Tktable"))){
+	#	tkmessageBox(title="Error",message="Package Tktable was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
+	#	return()
+	#}
 	if(!is.tclObj(tclRequire("Img"))){
 		tkmessageBox(title="Error",message="Package Img was not found. Please, make sure that this package is installed on your system or add the right path using addTclPath command!",icon="error",type="ok")
 		return()
@@ -867,22 +1030,40 @@ RIPAgui <- function(){
 	}
 
 	if(!(require(fftw))){
-		tkmessageBox(title="Error",message="Package tkrplot was not found. Please, install this package running the command 'install.packages('fftw')",icon="error",type="ok")
+		tkmessageBox(title="Error",message="Package fftw was not found. Please, install this package running the command 'install.packages('fftw')",icon="error",type="ok")
 		return()
+	}
+
+	if(!(require(foreach))){
+		tkmessageBox(title="Error",message="Package foreach was not found. Please, install this package running the command 'install.packages('foreach')",icon="error",type="ok")
+		return()
+	}
+
+	if(Sys.info()[['sysname']]=='Windows') {	
+		if(!(require(doSNOW))){
+			tkmessageBox(title="Error",message="Package doSNOW was not found. Please, install this package running the command 'install.packages('doSNOW')",icon="error",type="ok")
+			return()
+		}
+	}
+	else {
+		if(!(require(doMC))){
+			tkmessageBox(title="Error",message="Package doMC was not found. Please, install this package running the command 'install.packages('doMC')",icon="error",type="ok")
+			return()
+		}
 	}
 
 	##################################################################################################################
 
-	ans <- tkmessageBox(title="Resolution",message="We recomend to use this package with resolution of 1024x768. Do you want to continue?",icon="question",type="yesno")
-	ans <- as.character(ans)
-	if (ans=="no") return()
+	#ans <- tkmessageBox(title="Resolution",message="We recomend to use this package with resolution of 1024x768. Do you want to continue?",icon="question",type="yesno")
+	#ans <- as.character(ans)
+	#if (ans=="no") return()
 	
 	
 	
 	##################################################################################################################
 	###################################### Main window ###############################################################
 	##################################################################################################################
-	tt <- tktoplevel()
+	tt<- tktoplevel()
 	tkwm.resizable(tt,0,0)
 	tktitle(tt)<-"Image Processing and Analysis in R"
 
@@ -1665,6 +1846,7 @@ RIPAgui <- function(){
 	# Function to quit the interface
 	quit <- function(){
 		tkdestroy(tt)
+		stopCluster(get('cluster',envir=ripaEnv))
 	}
 	#
 	
@@ -3052,17 +3234,30 @@ RIPAgui <- function(){
 		tkpack(sw,fill="both",expand="yes")
 		tkgrid(lab,row=1,column=1)
 		sampleList <<- list()
+
 		OnClick <- function(W){
 			bandsSet_local <- get('bandsSet',envir=ripaEnv)
+			if (tab=="1") {
+				bands_selection <- get('AVIRISbands1',envir=ripaEnv)
+			} else {
+				bands_selection <- get('AVIRISbands2',envir=ripaEnv)
+			}
 			band <- as.integer(strsplit(W,paste(subfID,".lab",sep=""))[[1]][2])
 			if (bandsSet_local[band]==TRUE){
 				tkmessageBox(title="Band number",message=paste("Band ",band," deselected!",sep=""),type="ok")
 				bandsSet_local[band] <- FALSE
+				bands_selection = setdiff(bands_selection, band)
 			}else{
 				tkmessageBox(title="Band number",message=paste("Band ",band," selected!",sep=""),type="ok")
 				bandsSet_local[band] <- TRUE
+				bands_selection = c(bands_selection,band)
 			}
 			assign('bandsSet',bandsSet_local,envir=ripaEnv)
+			if (tab=="1") {
+				assign('AVIRISbands1',bands_selection,envir=ripaEnv)
+			} else {
+				assign('AVIRISbands2',bands_selection,envir=ripaEnv)
+			}
 		}
 		r <- 2
 		imagetmp <- limage(as.character(fileName),"reflectance")
@@ -3071,10 +3266,11 @@ RIPAgui <- function(){
 		for (i in (1:224))
 		{
 			## Take samples from band i and put into img
-			img <- clineal(lbandsample(imagetmpScene2,i)@data,0,1)
-			if (is.nan(img[1])){
-				for (j in 1:length(img)) img[j] <- 0
-			}
+			band_temp <- lbandsample(imagetmpScene2,i)
+			img <- band_temp@data
+			#if (is.nan(img[1])){
+			#	for (j in 1:length(img)) img[j] <- 0
+			#}
 			jpeg("imgtmp.jpg",width=200,height=200)
 			plot(imagematrix(img))
 			dev.off()
@@ -3104,18 +3300,22 @@ RIPAgui <- function(){
 
 		onOK <- function(){
 			tkdestroy(ttsamples)
-			countbands <- 0
-			bandsSet_local <- get('bandsSet',envir=ripaEnv)
-			for (i in 1:224){
-				if (bandsSet_local[i]==TRUE){
-					countbands <- countbands + 1
-					if (tab=="1") assign('AVIRISbands1',c(get('AVIRISbands1',envir=ripaEnv),i),envir=ripaEnv)	
-					else assign('AVIRISbands2',c(get('AVIRISbands2',envir=ripaEnv),i),envir=ripaEnv)
-				}
-			}
+			countbands <- length(get('AVIRISbands1',envir=ripaEnv))
+			#bandsSet_local <- get('bandsSet',envir=ripaEnv)
+			#for (i in 1:224){
+			#	if (bandsSet_local[i]==TRUE){
+			#		countbands <- countbands + 1
+			#		if (tab=="1") assign('AVIRISbands1',c(get('AVIRISbands1',envir=ripaEnv),i),envir=ripaEnv)	
+			#		else assign('AVIRISbands2',c(get('AVIRISbands2',envir=ripaEnv),i),envir=ripaEnv)
+			#	}
+			#}
 			
 			if (tab=="1"){
-				assign('img1',read.aviris(as.character(fileName)),envir=ripaEnv)
+				bandsIndexes <- get('AVIRISbands1',envir=ripaEnv)
+				assign('bands',vector(length=length(bandsIndexes),mode="list"),envir=ripaEnv)
+				bands_local <- get('bands',envir=ripaEnv)
+				use_parallel<-tclvalue(get('useParallel',envir=ripaEnv))
+				assign('img1',read.aviris(as.character(fileName),bandsIndexes,bands_local,use_parallel),envir=ripaEnv)
 				image <-tkrplot(Frame2, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
  				tkpack(image)
  				image <-tkrplot(Frame4, function() plot(imagematrix(get('img1',envir=ripaEnv))),vscale=1.04,hscale=0.98)
@@ -3125,7 +3325,11 @@ RIPAgui <- function(){
  				assign('imageType1',"jpgRGB",envir=ripaEnv)
 			}
 			if (tab=="2"){
-				assign('img3',read.aviris(as.character(fileName)),envir=ripaEnv)
+				bandsIndexes <- get('AVIRISbands2',envir=ripaEnv)
+				assign('bands',vector(length=length(bandsIndexes),mode="list"),envir=ripaEnv)
+				bands_local <- get('bands',envir=ripaEnv)
+				use_parallel<-tclvalue(get('useParallel',envir=ripaEnv))
+				assign('img3',read.aviris(as.character(fileName),bandsIndexes,bands_local,use_parallel),envir=ripaEnv)
 				image <-tkrplot(Frame6, function() plot(imagematrix(get('img3',envir=ripaEnv))),vscale=1.04,hscale=0.98)
  				tkpack(image)
  				assign('numbands2',countbands,envir=ripaEnv)
@@ -3528,7 +3732,52 @@ RIPAgui <- function(){
 	#
 
 	showAbout <-function(){
-		tkmessageBox(title="About",message="R Image Processing and Analysis\nVersion 2.0-1\n\nTalita Perciano - LBNL, USA \nAlejandro C. Frery - IC/UFAL, Brazil",icon="info",type="ok")
+		tkmessageBox(title="About",message="R Image Processing and Analysis\nVersion 2.0-2\n\nTalita Perciano - LBNL, USA \nAlejandro C. Frery - IC/UFAL, Brazil",icon="info",type="ok")
+	}
+
+
+	highPOptions <- function(){
+		tt_parallel <- tktoplevel()
+		tktitle(tt_parallel)<-"Hight Performance Options"
+		cb_parallel <- tkcheckbutton(tt_parallel)
+		useParallel_local <- get('useParallel',envir=ripaEnv)
+		numProcessors_local <- get('numProcessors',envir=ripaEnv)
+		entry.processors <-tkentry(tt_parallel,width="20",textvariable=numProcessors_local)
+		tkconfigure(cb_parallel,variable=useParallel_local)
+		tkgrid(tklabel(tt_parallel,text="Use parallel process suport"),cb_parallel)
+		tkgrid(tklabel(tt_parallel,text="Please enter the number of processors"))
+		tkgrid(entry.processors)
+		OnOK <- function()
+		{
+			assign('useParallel',useParallel_local,envir=ripaEnv)	
+			if ( (as.integer(tclvalue(useParallel_local))==1) ) {
+				if (is.na(as.integer(tclvalue(numProcessors_local)))) {
+					tkmessageBox(title="Error",message="Please enter a valid number of processors!",icon="error",type="ok")
+				}
+				else {
+					assign('numProcessors',numProcessors_local,envir=ripaEnv)
+					if ( as.integer(tclvalue(useParallel_local))==1 ) {
+						numproc <- as.integer(tclvalue(numProcessors_local))
+						assign('cluster',makeCluster(numproc),envir=ripaEnv)
+						#registerDoParallel(get('cluster',envir=ripaEnv))
+
+						if (Sys.info()[['sysname']]=='Windows'){
+							registerDoSNOW(get('cluster',envir=ripaEnv))
+						}
+						else {
+							doMC::registerDoMC(cores=numproc)
+						}
+					}
+					tkdestroy(tt_parallel)
+				}
+			}
+			else {
+				tkdestroy(tt_parallel)
+			}
+		}
+		OK.but <- tkbutton(tt_parallel,text="OK",command=OnOK)
+		tkgrid(OK.but)
+		
 	}
 	
 	##################################################################################################################
@@ -3668,6 +3917,9 @@ RIPAgui <- function(){
 	bandsMenu <- tkmenu(topMenu,tearoff=FALSE)
 	#
 	
+	# High Performance Menu
+	highPMenu <- tkmenu(topMenu, tearoff=FALSE)
+
 	# Help Menu
 	helpMenu <- tkmenu(topMenu,tearoff=FALSE)
 	#
@@ -3793,6 +4045,9 @@ RIPAgui <- function(){
 	tkadd(segmentationMenu, "command", label="Thresholding",command=function() segmentation(1))
 	#
 	
+	# Configure High Performance menu
+	tkadd(highPMenu,"command",label="Options",command=function() highPOptions(),underline=0)
+
 	# Configure Help menu
 	tkadd(helpMenu,"command",label="About",command=function() showAbout(),underline=0)
 	#
@@ -3802,6 +4057,7 @@ RIPAgui <- function(){
 	tkadd(topMenu,"cascade",label="Operations",menu=operationsMenu,underline=0)
 	tkadd(topMenu,"cascade",label="Regions",menu=regionsMenu,underline=0)
 	tkadd(topMenu,"cascade",label="Bands",menu=bandsMenu,underline=0)
+	tkadd(topMenu,"cascade",label="High Performance",menu=highPMenu,underline=0)
 	tkadd(topMenu,"cascade",label="Help",menu=helpMenu,underline=0)
 	#
 	
